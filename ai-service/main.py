@@ -9,8 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 import uvicorn
 
-from .utils.logger import setup_logger
-from .agents.orchestrator import run_workflow
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from utils.logger import setup_logger
+from agents.orchestrator import run_workflow
 
 logger = setup_logger()
 
@@ -179,6 +183,5 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 
 if __name__ == "__main__":
-    # 设置端口为8001
-    port = int(os.environ.get("PORT", 8001))
+    port = int(os.environ.get("PORT", 8002))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
