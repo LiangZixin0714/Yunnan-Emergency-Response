@@ -12,6 +12,7 @@ from utils.logger import setup_logger
 from agents.info_extractor import extract_incident_info
 from agents.plan_generator import generate_plan
 from agents.plan_reviewer import review_plan
+from rag.retriever import retrieve_plans
 
 logger = setup_logger()
 
@@ -22,6 +23,7 @@ class AgentState(TypedDict):
     """LangGraph状态定义。"""
     description: str
     info: Dict[str, Any]
+    retrieved_plans: List[Dict[str, Any]]
     plan: str
     review: Dict[str, Any]
     messages: List[str]
@@ -50,12 +52,44 @@ def _extract_info(state: AgentState) -> AgentState:
     return state
 
 
+def _retrieve_plans(state: AgentState) -> AgentState:
+    """RAG检索节点：根据灾情信息检索相关预案。"""
+    logger.info("🔹 LangGraph: 执行RAG检索")
+    
+    try:
+        # 构建查询关键词（灾害类型 + 位置）
+        info = state.get("info", {})
+        disaster_type = info.get("type", "")
+        location = info.get("location", "")
+        query = f"{disaster_type} {location} 应急处置"
+        
+        # 执行检索（限制返回数量以控制上下文长度）
+        plans = retrieve_plans(query, limit=3)
+        state["retrieved_plans"] = plans
+        
+        if plans:
+            logger.info(f"🔹 LangGraph: RAG检索成功，返回 {len(plans)} 条预案")
+            plan_names = ", ".join([p["document_name"] for p in plans[:3]])
+            state["messages"].append(f"RAG检索完成，找到 {len(plans)} 条相关预案: {plan_names}{'...' if len(plans) > 3 else ''}")
+        else:
+            logger.info("🔹 LangGraph: RAG检索未找到相关预案")
+            state["messages"].append("RAG检索未找到相关预案，将基于通用知识生成方案")
+    
+    except Exception as e:
+        logger.error(f"🔹 LangGraph: RAG检索失败: {e}")
+        state["retrieved_plans"] = []
+        state["messages"].append(f"RAG检索失败: {e}")
+    
+    return state
+
+
 def _generate_plan(state: AgentState) -> AgentState:
-    """方案生成节点：生成完整应急处置方案。"""
+    """方案生成节点：生成完整应急处置方案（结合RAG检索结果）。"""
     logger.info("🔹 LangGraph: 执行方案生成")
     
     try:
-        plan = generate_plan(state["info"], state["description"])
+        retrieved_plans = state.get("retrieved_plans", [])
+        plan = generate_plan(state["info"], state["description"], retrieved_plans)
         state["plan"] = plan
         state["messages"].append(f"方案生成完成，长度 {len(plan)} 字符")
     except Exception as e:
@@ -105,7 +139,7 @@ def _should_retry(state: AgentState) -> str:
 def build_workflow() -> StateGraph:
     """构建LangGraph多Agent工作流。
     
-    流程：情报分析 → 方案生成 → 方案审查 → 判断是否重试
+    流程：情报分析 → RAG检索 → 方案生成 → 方案审查 → 判断是否重试
     
     Returns:
         编译后的LangGraph workflow对象
@@ -115,12 +149,14 @@ def build_workflow() -> StateGraph:
     workflow = StateGraph(AgentState)
     
     workflow.add_node("extract_info", _extract_info)
+    workflow.add_node("retrieve_plans", _retrieve_plans)
     workflow.add_node("generate_plan", _generate_plan)
     workflow.add_node("review_plan", _review_plan)
     
     workflow.set_entry_point("extract_info")
     
-    workflow.add_edge("extract_info", "generate_plan")
+    workflow.add_edge("extract_info", "retrieve_plans")
+    workflow.add_edge("retrieve_plans", "generate_plan")
     workflow.add_edge("generate_plan", "review_plan")
     
     workflow.add_conditional_edges(
@@ -148,6 +184,7 @@ def run_workflow(description: str) -> Dict[str, Any]:
         initial_state = {
             "description": description,
             "info": {},
+            "retrieved_plans": [],
             "plan": "",
             "review": {},
             "messages": ["工作流开始"],

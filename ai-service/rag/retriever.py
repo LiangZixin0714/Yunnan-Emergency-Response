@@ -130,6 +130,7 @@ def retrieve_plans(query: str, limit: int = 5) -> List[Dict[str, any]]:
         
     Returns:
         检索结果列表，每个元素包含text、similarity、plan_id、document_name等信息
+        如果数据库连接失败或其他异常，返回空列表，不影响主流程
     """
     try:
         # 确保表结构存在
@@ -144,13 +145,19 @@ def retrieve_plans(query: str, limit: int = 5) -> List[Dict[str, any]]:
         cur = conn.cursor()
         
         # 使用余弦距离查询（<=>表示向量余弦距离）
+        # 1 - cosine_distance = similarity_score
         select_sql = """
         SELECT 
             chunk_id,
             document_name,
             document_type,
             chapter,
+            section,
+            page,
             content,
+            source,
+            publish_org,
+            version,
             1 - (embedding <=> %s::vector) as similarity
         FROM knowledge_chunks
         ORDER BY embedding <=> %s::vector
@@ -169,8 +176,13 @@ def retrieve_plans(query: str, limit: int = 5) -> List[Dict[str, any]]:
                 "document_name": row[1],
                 "document_type": row[2],
                 "chapter": row[3],
-                "text": row[4],
-                "similarity": float(row[5])
+                "section": row[4],
+                "page": row[5],
+                "text": row[6],
+                "source": row[7],
+                "publish_org": row[8],
+                "version": row[9],
+                "similarity": float(row[10])
             })
         
         logger.info(f"🔍 RAG检索完成，查询: '{query[:30]}...'，返回 {len(output)} 条结果")
