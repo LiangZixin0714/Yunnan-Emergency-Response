@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 import uvicorn
 
 from .utils.logger import setup_logger
-from .rag.retriever import check_database_status
 from .agents.orchestrator import run_workflow
 
 logger = setup_logger()
@@ -28,29 +27,16 @@ app.add_middleware(
 
 # 全局变量
 _workflow_ready = False
-_db_status = {}
 
 
 @app.on_event("startup")
 async def startup():
     """启动时执行初始化操作。"""
-    global _workflow_ready, _db_status
+    global _workflow_ready
     
     logger.info("🚀 正在启动AI服务...")
     
     try:
-        # 检查数据库连接和表结构
-        logger.info("🔍 正在检查数据库状态...")
-        _db_status = check_database_status()
-        
-        if _db_status.get("connected", False):
-            logger.info(f"✅ 数据库连接成功: {_db_status.get('database')}")
-            logger.info(f"   表存在: {_db_status.get('table_exists')}")
-            logger.info(f"   数据量: {_db_status.get('row_count')} 条")
-            logger.info(f"   向量维度: {_db_status.get('vector_dim')}")
-        else:
-            logger.warning(f"⚠️ 数据库连接失败: {_db_status.get('error')}")
-        
         _workflow_ready = True
         logger.info("✅ AI服务启动完成！")
         
@@ -65,7 +51,6 @@ async def health() -> Dict[str, Any]:
     return {
         "status": "ok" if _workflow_ready else "degraded",
         "service": "ai-service",
-        "database": _db_status,
         "workflow_ready": _workflow_ready
     }
 
@@ -181,15 +166,6 @@ async def generate_plan_stream(request: Request) -> StreamingResponse:
             content={"detail": f"方案生成失败: {str(e)}"},
             status_code=500
         )
-
-
-@app.get("/api/v1/db-status")
-async def db_status() -> Dict[str, Any]:
-    """查看数据库状态接口。"""
-    return {
-        "database": _db_status,
-        "workflow_ready": _workflow_ready
-    }
 
 
 @app.exception_handler(Exception)

@@ -1,42 +1,29 @@
-"""方案生成Agent，结合情报分析结果+RAG检索结果+原始描述，生成完整处置方案。"""
+"""方案生成Agent，结合情报分析结果和原始描述，生成完整处置方案。"""
 
-import os
 import logging
 import sys
-from typing import Dict, List, Any
+import os
+from typing import Dict, Any
 
 from openai import OpenAI
 
-# 添加项目根目录到sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils.logger import setup_logger
 
 logger = setup_logger()
 
 # vLLM配置
-VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
+VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://127.0.0.1:8000/v1")
 VLLM_API_KEY = os.environ.get("VLLM_API_KEY", "EMPTY")
 
-# 创建OpenAI客户端
 _client = OpenAI(
     base_url=VLLM_BASE_URL,
     api_key=VLLM_API_KEY
 )
 
 
-def _build_prompt(info: Dict[str, Any], rag_results: List[Dict[str, Any]], description: str) -> str:
-    """构建方案生成的Prompt。
-    
-    Args:
-        info: 情报分析结果
-        rag_results: RAG检索结果
-        description: 原始灾情描述
-        
-    Returns:
-        完整的Prompt字符串
-    """
-    system_prompt = """你是一个专业的自然灾害应急处置方案生成专家。请根据提供的情报分析结果、相关预案参考和原始灾情描述，生成一份完整的应急处置方案。
+def _build_prompt(info: Dict[str, Any], description: str) -> str:
+    system_prompt = """你是一个专业的自然灾害应急处置方案生成专家。请根据提供的情报分析结果和原始灾情描述，生成一份完整的应急处置方案。
 
 方案必须包含以下六个章节：
 1. 事件概况：简要描述灾害发生的时间、地点、类型、等级等基本信息
@@ -50,14 +37,7 @@ def _build_prompt(info: Dict[str, Any], rag_results: List[Dict[str, Any]], descr
 - 方案结构清晰，逻辑严谨
 - 语言专业、简洁、易懂
 - 措施具体可行，具有操作性
-- 结合参考预案中的相关内容，但不要直接复制
 - 根据灾情等级制定相应级别的响应措施"""
-    
-    # 构建参考预案文本
-    rag_text = "\n".join([
-        f"参考预案{idx+1}（相似度: {result['similarity']:.4f}）:\n{result['text'][:500]}" 
-        for idx, result in enumerate(rag_results)
-    ]) if rag_results else "暂无参考预案"
     
     user_prompt = f"""请根据以下信息生成应急处置方案：
 
@@ -71,9 +51,6 @@ def _build_prompt(info: Dict[str, Any], rag_results: List[Dict[str, Any]], descr
 - 受影响人数: {info.get('affected_population', '未知')}
 - 置信度: {info.get('confidence', 0.0)}
 
-【参考预案】
-{rag_text}
-
 请生成一份完整的应急处置方案。"""
     
     # Qwen2.5原生格式
@@ -85,30 +62,18 @@ def _build_prompt(info: Dict[str, Any], rag_results: List[Dict[str, Any]], descr
 <|im_end|>
 <|im_start|>assistant
 """
-    
     return prompt
 
 
-def generate_plan(info: Dict[str, Any], rag_results: List[Dict[str, Any]], description: str) -> str:
-    """结合情报分析结果、RAG检索结果和原始描述生成应急方案。
-    
-    Args:
-        info: 情报分析结果字典
-        rag_results: RAG检索结果列表
-        description: 原始灾情描述
-        
-    Returns:
-        完整的应急方案文本
-    """
-    logger.info(f"📝 开始生成方案，灾害类型: {info.get('type')}, 等级: {info.get('level')}, RAG结果数: {len(rag_results)}")
+def generate_plan(info: Dict[str, Any], description: str) -> str:
+    """结合情报分析结果和原始描述生成应急方案。"""
+    logger.info(f"📝 开始生成方案，灾害类型: {info.get('type')}, 等级: {info.get('level')}")
     
     try:
-        # 构建Prompt
-        prompt = _build_prompt(info, rag_results, description)
+        prompt = _build_prompt(info, description)
         
-        # 调用vLLM
         response = _client.completions.create(
-            model="Qwen2.5-7B-Instruct",
+            model="Qwen/Qwen2.5-7B-Instruct",
             prompt=prompt,
             max_tokens=2048,
             temperature=0.7,
@@ -116,10 +81,8 @@ def generate_plan(info: Dict[str, Any], rag_results: List[Dict[str, Any]], descr
             stop=["<|im_end|>"]
         )
         
-        # 提取响应文本
         plan_text = response.choices[0].text.strip()
         
-        # 如果响应为空，生成默认方案
         if not plan_text:
             logger.warning("⚠️ vLLM响应为空，生成默认方案")
             plan_text = _generate_default_plan(info, description)
@@ -133,20 +96,12 @@ def generate_plan(info: Dict[str, Any], rag_results: List[Dict[str, Any]], descr
 
 
 def _generate_default_plan(info: Dict[str, Any], description: str) -> str:
-    """生成默认方案（当vLLM调用失败时使用）。
-    
-    Args:
-        info: 情报分析结果
-        description: 原始灾情描述
-        
-    Returns:
-        默认的应急方案文本
-    """
+    """生成默认方案（当vLLM调用失败时使用）。"""
     disaster_type = info.get('type', '未知灾害')
     location = info.get('location', '未知地点')
     level = info.get('level', '未知等级')
     
-    default_plan = f"""# {disaster_type}应急处置方案
+    return f"""# {disaster_type}应急处置方案
 
 ## 一、事件概况
 {description}
@@ -178,14 +133,10 @@ def _generate_default_plan(info: Dict[str, Any], description: str) -> str:
 - 安全保障：确保救援人员安全
 
 ---
-*注：本方案为自动生成的默认方案，请根据实际情况调整。*
-"""
-    
-    return default_plan
+*注：本方案为自动生成的默认方案，请根据实际情况调整。*"""
 
 
 if __name__ == "__main__":
-    # 测试方案生成功能
     test_info = {
         "type": "地震",
         "level": "高",
@@ -193,18 +144,6 @@ if __name__ == "__main__":
         "affected_population": 500,
         "confidence": 0.9
     }
-    
-    test_rag_results = [
-        {
-            "plan_id": "test-1",
-            "document_name": "云南省地震应急预案",
-            "text": "地震发生后，应立即启动相应级别的应急响应，组织人员疏散和搜救工作...",
-            "similarity": 0.85
-        }
-    ]
-    
     test_description = "云南省昆明市五华区发生4.5级地震，震源深度10公里，部分房屋受损，约500人受影响。"
-    
-    result = generate_plan(test_info, test_rag_results, test_description)
-    print("方案生成结果:")
+    result = generate_plan(test_info, test_description)
     print(result)

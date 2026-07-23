@@ -1,31 +1,27 @@
 """方案审查Agent，对生成的方案进行合规性检查，给出评分和修改建议。"""
 
-import os
 import json
 import logging
 import sys
+import os
 from typing import Dict, Any
 
 from openai import OpenAI
 
-# 添加项目根目录到sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils.logger import setup_logger
 
 logger = setup_logger()
 
 # vLLM配置
-VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
+VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://127.0.0.1:8000/v1")
 VLLM_API_KEY = os.environ.get("VLLM_API_KEY", "EMPTY")
 
-# 创建OpenAI客户端
 _client = OpenAI(
     base_url=VLLM_BASE_URL,
     api_key=VLLM_API_KEY
 )
 
-# 必需章节列表
 REQUIRED_SECTIONS = [
     "事件概况",
     "风险评估",
@@ -37,29 +33,11 @@ REQUIRED_SECTIONS = [
 
 
 def _check_sections(plan: str) -> Dict[str, bool]:
-    """基于规则检查方案是否包含必需章节。
-    
-    Args:
-        plan: 方案文本
-        
-    Returns:
-        章节检查结果字典
-    """
-    results = {}
-    for section in REQUIRED_SECTIONS:
-        results[section] = section in plan
-    return results
+    """基于规则检查方案是否包含必需章节。"""
+    return {section: section in plan for section in REQUIRED_SECTIONS}
 
 
 def _build_prompt(plan: str) -> str:
-    """构建方案审查的Prompt。
-    
-    Args:
-        plan: 方案文本
-        
-    Returns:
-        完整的Prompt字符串
-    """
     system_prompt = """你是一个专业的自然灾害应急处置方案审查专家。请对提供的应急方案进行全面审查。
 
 审查内容：
@@ -100,27 +78,17 @@ passed字段：score >= 7 时为true，否则为false"""
 <|im_end|>
 <|im_start|>assistant
 """
-    
     return prompt
 
 
 def review_plan(plan: str) -> Dict[str, Any]:
-    """审查应急方案的合规性和可行性。
-    
-    Args:
-        plan: 应急方案文本
-        
-    Returns:
-        包含score（评分）、issues（问题列表）、passed（是否通过）的字典
-    """
+    """审查应急方案的合规性和可行性。"""
     logger.info(f"🔍 开始方案审查，方案长度: {len(plan)}")
     
     try:
-        # 先进行规则检查
         section_check = _check_sections(plan)
         missing_sections = [section for section, exists in section_check.items() if not exists]
         
-        # 如果缺少必需章节，直接返回失败（基于规则）
         if missing_sections:
             logger.warning(f"⚠️ 缺少必需章节: {', '.join(missing_sections)}")
             return {
@@ -130,11 +98,10 @@ def review_plan(plan: str) -> Dict[str, Any]:
                 "suggestions": [f"请补充以下章节: {', '.join(missing_sections)}"]
             }
         
-        # 调用vLLM进行深度审查
         prompt = _build_prompt(plan)
         
         response = _client.completions.create(
-            model="Qwen2.5-7B-Instruct",
+            model="Qwen/Qwen2.5-7B-Instruct",
             prompt=prompt,
             max_tokens=512,
             temperature=0.3,
@@ -142,11 +109,9 @@ def review_plan(plan: str) -> Dict[str, Any]:
             stop=["<|im_end|>"]
         )
         
-        # 解析响应
         result_text = response.choices[0].text.strip()
         logger.debug(f"📝 vLLM审查响应: {result_text[:200]}")
         
-        # 提取JSON部分
         start_idx = result_text.find("{")
         end_idx = result_text.rfind("}") + 1
         
@@ -154,7 +119,6 @@ def review_plan(plan: str) -> Dict[str, Any]:
             json_str = result_text[start_idx:end_idx]
             try:
                 review_result = json.loads(json_str)
-                # 确保字段完整
                 review_result.setdefault("score", 5)
                 review_result.setdefault("issues", [])
                 review_result.setdefault("passed", False)
@@ -165,7 +129,6 @@ def review_plan(plan: str) -> Dict[str, Any]:
             except json.JSONDecodeError as e:
                 logger.error(f"❌ JSON解析失败: {e}")
         
-        # 如果JSON解析失败，使用规则检查结果
         logger.warning("⚠️ 无法解析JSON响应，使用规则检查结果")
         return {
             "score": 7,
@@ -176,7 +139,6 @@ def review_plan(plan: str) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"❌ 方案审查失败: {e}")
-        # 规则检查作为兜底
         section_check = _check_sections(plan)
         missing_sections = [section for section, exists in section_check.items() if not exists]
         
@@ -197,7 +159,6 @@ def review_plan(plan: str) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # 测试方案审查功能
     test_plan = """# 地震应急处置方案
 
 ## 一、事件概况
@@ -217,7 +178,5 @@ if __name__ == "__main__":
 
 ## 六、保障措施
 确保通信和物资供应。"""
-    
     result = review_plan(test_plan)
-    print("方案审查结果:")
     print(json.dumps(result, ensure_ascii=False, indent=2))

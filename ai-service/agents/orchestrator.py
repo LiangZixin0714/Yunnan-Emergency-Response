@@ -1,34 +1,31 @@
-"""LangGraph多Agent编排模块，串联情报分析、RAG检索、方案生成、方案审查四个Agent。"""
+"""LangGraph多Agent编排模块，串联情报分析、方案生成、方案审查三个Agent。"""
 
 import logging
 import sys
 import os
-from typing import Dict, List, Any, TypedDict
+from typing import Dict, Any, TypedDict, List
 
 from langgraph.graph import StateGraph, END
 
-# 添加项目根目录到sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils.logger import setup_logger
-from rag.retriever import retrieve_plans
 from agents.info_extractor import extract_incident_info
 from agents.plan_generator import generate_plan
 from agents.plan_reviewer import review_plan
-from agents.resource_dispatcher import dispatch_resources
 
 logger = setup_logger()
 
+
+MAX_RETRY_COUNT = 3
 
 class AgentState(TypedDict):
     """LangGraph状态定义。"""
     description: str
     info: Dict[str, Any]
-    rag_results: List[Dict[str, Any]]
     plan: str
     review: Dict[str, Any]
-    resources: List[Dict[str, Any]]
     messages: List[str]
+    retry_count: int
 
 
 def _extract_info(state: AgentState) -> AgentState:
@@ -53,46 +50,12 @@ def _extract_info(state: AgentState) -> AgentState:
     return state
 
 
-def _retrieve_plans(state: AgentState) -> AgentState:
-    """RAG检索节点：从向量数据库检索相关预案。"""
-    logger.info("🔹 LangGraph: 执行RAG检索")
-    
-    try:
-        # 使用灾情描述和提取的信息作为查询
-        query = f"{state['description']} {state['info'].get('type', '')} {state['info'].get('location', '')}"
-        rag_results = retrieve_plans(query, limit=5)
-        state["rag_results"] = rag_results
-        state["messages"].append(f"RAG检索完成，找到 {len(rag_results)} 条相关预案")
-    except Exception as e:
-        logger.error(f"🔹 LangGraph: RAG检索失败: {e}")
-        state["rag_results"] = []
-        state["messages"].append(f"RAG检索失败: {e}")
-    
-    return state
-
-
-def _dispatch_resources(state: AgentState) -> AgentState:
-    """资源调度节点：根据灾情信息调度资源。"""
-    logger.info("🔹 LangGraph: 执行资源调度")
-    
-    try:
-        resources = dispatch_resources(state["info"])
-        state["resources"] = resources
-        state["messages"].append(f"资源调度完成，推荐 {len(resources)} 种资源")
-    except Exception as e:
-        logger.error(f"🔹 LangGraph: 资源调度失败: {e}")
-        state["resources"] = []
-        state["messages"].append(f"资源调度失败: {e}")
-    
-    return state
-
-
 def _generate_plan(state: AgentState) -> AgentState:
     """方案生成节点：生成完整应急处置方案。"""
     logger.info("🔹 LangGraph: 执行方案生成")
     
     try:
-        plan = generate_plan(state["info"], state["rag_results"], state["description"])
+        plan = generate_plan(state["info"], state["description"])
         state["plan"] = plan
         state["messages"].append(f"方案生成完成，长度 {len(plan)} 字符")
     except Exception as e:
@@ -124,55 +87,42 @@ def _review_plan(state: AgentState) -> AgentState:
 
 
 def _should_retry(state: AgentState) -> str:
-    """决策节点：判断是否需要重试方案生成。
-    
-    如果方案审查未通过，且评分大于4分，则重试；否则直接结束。
-    
-    Returns:
-        "generate_plan" 或 END
-    """
+    """决策节点：判断是否需要重试方案生成。"""
     review = state.get("review", {})
     passed = review.get("passed", True)
+    retry_count = state.get("retry_count", 0)
     
-    if not passed and review.get("score", 0) > 4:
-        logger.info("🔹 LangGraph: 方案未通过，重试生成")
-        state["messages"].append("方案未通过审查，重新生成...")
+    if not passed and review.get("score", 0) > 4 and retry_count < MAX_RETRY_COUNT:
+        state["retry_count"] = retry_count + 1
+        logger.info(f"🔹 LangGraph: 方案未通过，重试生成 (第 {state['retry_count']}/{MAX_RETRY_COUNT} 次)")
+        state["messages"].append(f"方案未通过审查，重新生成... (第 {state['retry_count']}/{MAX_RETRY_COUNT} 次)")
         return "generate_plan"
     
-    logger.info("🔹 LangGraph: 方案审查通过或无需重试，流程结束")
+    logger.info("🔹 LangGraph: 方案审查通过或达到最大重试次数，流程结束")
     return END
 
 
 def build_workflow() -> StateGraph:
     """构建LangGraph多Agent工作流。
     
-    流程：情报分析 → RAG检索 → 资源调度 → 方案生成 → 方案审查 → 判断是否重试
+    流程：情报分析 → 方案生成 → 方案审查 → 判断是否重试
     
     Returns:
         编译后的LangGraph workflow对象
     """
     logger.info("🔧 正在构建LangGraph工作流...")
     
-    # 创建状态图
     workflow = StateGraph(AgentState)
     
-    # 添加节点
     workflow.add_node("extract_info", _extract_info)
-    workflow.add_node("retrieve_plans", _retrieve_plans)
-    workflow.add_node("dispatch_resources", _dispatch_resources)
     workflow.add_node("generate_plan", _generate_plan)
     workflow.add_node("review_plan", _review_plan)
     
-    # 设置起点
     workflow.set_entry_point("extract_info")
     
-    # 添加边（线性流程）
-    workflow.add_edge("extract_info", "retrieve_plans")
-    workflow.add_edge("retrieve_plans", "dispatch_resources")
-    workflow.add_edge("dispatch_resources", "generate_plan")
+    workflow.add_edge("extract_info", "generate_plan")
     workflow.add_edge("generate_plan", "review_plan")
     
-    # 添加条件边（决策节点）
     workflow.add_conditional_edges(
         "review_plan",
         _should_retry,
@@ -182,7 +132,6 @@ def build_workflow() -> StateGraph:
         }
     )
     
-    # 编译工作流
     app = workflow.compile()
     logger.info("✅ LangGraph工作流构建完成")
     
@@ -190,32 +139,21 @@ def build_workflow() -> StateGraph:
 
 
 def run_workflow(description: str) -> Dict[str, Any]:
-    """运行完整工作流。
-    
-    Args:
-        description: 灾情描述文本
-        
-    Returns:
-        包含所有结果的字典
-    """
+    """运行完整工作流。"""
     logger.info(f"🚀 开始执行工作流，描述长度: {len(description)}")
     
     try:
-        # 获取编译后的工作流
         app = build_workflow()
         
-        # 初始化状态
         initial_state = {
             "description": description,
             "info": {},
-            "rag_results": [],
             "plan": "",
             "review": {},
-            "resources": [],
-            "messages": ["工作流开始"]
+            "messages": ["工作流开始"],
+            "retry_count": 0
         }
         
-        # 执行工作流
         result = app.invoke(initial_state)
         
         logger.info("✅ 工作流执行完成")
@@ -226,18 +164,14 @@ def run_workflow(description: str) -> Dict[str, Any]:
         return {
             "description": description,
             "info": {},
-            "rag_results": [],
             "plan": f"工作流执行失败: {e}",
             "review": {},
-            "resources": [],
             "messages": [f"工作流执行失败: {e}"]
         }
 
 
 if __name__ == "__main__":
-    # 测试工作流
     test_description = "云南省昆明市五华区发生4.5级地震，震源深度10公里，部分房屋受损，约500人受影响。"
-    
     result = run_workflow(test_description)
     
     print("\n" + "=" * 60)
@@ -252,10 +186,6 @@ if __name__ == "__main__":
     print(f"  类型: {result['info'].get('type')}")
     print(f"  等级: {result['info'].get('level')}")
     print(f"  位置: {result['info'].get('location')}")
-    
-    print("\n🚚 推荐资源:")
-    for resource in result["resources"]:
-        print(f"  - {resource['name']}: {resource['quantity']} 单位")
     
     print("\n🔍 审查结果:")
     print(f"  评分: {result['review'].get('score')}")

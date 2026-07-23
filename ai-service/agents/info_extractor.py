@@ -1,25 +1,22 @@
 """情报分析Agent，从灾情描述中提取结构化信息。"""
 
-import os
 import json
 import logging
 import sys
+import os
 from typing import Dict, Any
 
 from openai import OpenAI
 
-# 添加项目根目录到sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils.logger import setup_logger
 
 logger = setup_logger()
 
 # vLLM配置
-VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
+VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://127.0.0.1:8000/v1")
 VLLM_API_KEY = os.environ.get("VLLM_API_KEY", "EMPTY")
 
-# 创建OpenAI客户端
 _client = OpenAI(
     base_url=VLLM_BASE_URL,
     api_key=VLLM_API_KEY
@@ -27,14 +24,6 @@ _client = OpenAI(
 
 
 def _build_prompt(description: str) -> str:
-    """构建情报分析的Prompt。
-    
-    Args:
-        description: 灾情描述文本
-        
-    Returns:
-        完整的Prompt字符串
-    """
     system_prompt = """你是一个专业的自然灾害情报分析专家。请从用户提供的灾情描述中提取结构化信息。
 
 输出格式要求：
@@ -67,28 +56,18 @@ def _build_prompt(description: str) -> str:
 <|im_end|>
 <|im_start|>assistant
 """
-    
     return prompt
 
 
 def extract_incident_info(description: str) -> Dict[str, Any]:
-    """从灾情描述中提取关键情报信息。
-    
-    Args:
-        description: 灾情描述文本
-        
-    Returns:
-        包含 type、level、location、affected_population、confidence 的字典
-    """
+    """从灾情描述中提取关键情报信息。"""
     logger.info(f"📋 开始情报分析，描述长度: {len(description)}")
     
     try:
-        # 构建Prompt
         prompt = _build_prompt(description)
         
-        # 调用vLLM
         response = _client.completions.create(
-            model="Qwen2.5-7B-Instruct",
+            model="Qwen/Qwen2.5-7B-Instruct",
             prompt=prompt,
             max_tokens=512,
             temperature=0.3,
@@ -96,11 +75,9 @@ def extract_incident_info(description: str) -> Dict[str, Any]:
             stop=["<|im_end|>"]
         )
         
-        # 解析响应
         result_text = response.choices[0].text.strip()
         logger.debug(f"📝 vLLM响应: {result_text[:200]}")
         
-        # 提取JSON部分
         start_idx = result_text.find("{")
         end_idx = result_text.rfind("}") + 1
         
@@ -113,7 +90,6 @@ def extract_incident_info(description: str) -> Dict[str, Any]:
             except json.JSONDecodeError as e:
                 logger.error(f"❌ JSON解析失败: {e}")
         
-        # 如果JSON解析失败，返回默认值
         logger.warning("⚠️ 无法解析JSON响应，使用默认值")
         return {
             "type": "其他",
@@ -135,8 +111,6 @@ def extract_incident_info(description: str) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # 测试情报分析功能
     test_description = "云南省昆明市五华区发生4.5级地震，震源深度10公里，部分房屋受损，约500人受影响。"
     result = extract_incident_info(test_description)
-    print("情报分析结果:")
     print(json.dumps(result, ensure_ascii=False, indent=2))
