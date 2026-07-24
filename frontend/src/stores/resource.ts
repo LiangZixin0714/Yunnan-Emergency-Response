@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Resource, ResourceListParams, ResourceDispatchData } from '@/types/resource'
-import { getResourceList, dispatchResource } from '@/api/resource'
+import type { Resource, ResourceListParams, DispatchOrder } from '@/types/resource'
+import { getResourceList, getDispatchOrders } from '@/api/resource'
 
 export const useResourceStore = defineStore('resource', () => {
   const resourceList = ref<Resource[]>([])
+  const dispatchOrders = ref<DispatchOrder[]>([])
   const loading = ref(false)
 
   async function fetchList(params?: ResourceListParams): Promise<void> {
@@ -17,14 +18,20 @@ export const useResourceStore = defineStore('resource', () => {
     }
   }
 
-  async function dispatch(data: ResourceDispatchData): Promise<void> {
-    await dispatchResource(data)
+  async function fetchDispatchOrders(): Promise<void> {
+    try {
+      const res = await getDispatchOrders() as unknown as DispatchOrder[]
+      dispatchOrders.value = res
+    } catch {
+      dispatchOrders.value = []
+    }
   }
 
   return {
     resourceList,
+    dispatchOrders,
     loading,
     fetchList,
-    dispatch,
+    fetchDispatchOrders,
   }
 })

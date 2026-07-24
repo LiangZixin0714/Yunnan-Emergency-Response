@@ -2,18 +2,21 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useIncidentStore } from '@/stores/incident'
+import { useAuthStore } from '@/stores/auth'
 import StatusTag from '@/components/StatusTag.vue'
 import {
   DisasterTypeLabel,
   IncidentLevelLabel,
-  IncidentStatusLabel,
-  IncidentStatusTagType,
-  IncidentStatus,
+  DisposalPlanStatusLabel,
+  DisposalPlanStatusTagType,
+  ResourceDispatchStatusLabel,
+  ResourceDispatchStatusTagType,
 } from '@/types/enums'
-import type { DisasterTypeValue, IncidentLevelValue, IncidentStatusValue } from '@/types/enums'
+import type { DisasterTypeValue, IncidentLevelValue, DisposalPlanStatusValue, ResourceDispatchStatusValue } from '@/types/enums'
 
 const router = useRouter()
 const incidentStore = useIncidentStore()
+const authStore = useAuthStore()
 
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -21,18 +24,28 @@ const pageSize = ref(20)
 const filters = reactive({
   disasterType: '' as DisasterTypeValue | '',
   incidentLevel: '' as IncidentLevelValue | '',
-  status: '' as IncidentStatusValue | '',
   keyword: '',
 })
 
 const disasterOptions = Object.entries(DisasterTypeLabel).map(([value, label]) => ({ value, label }))
 const levelOptions = Object.entries(IncidentLevelLabel).map(([value, label]) => ({ value, label }))
-const statusOptions = Object.entries(IncidentStatusLabel).map(([value, label]) => ({ value, label }))
 
-const statusMap = Object.fromEntries(
-  Object.entries(IncidentStatusLabel).map(([key, label]) => [
+const incidentStatusMap: Record<string, { label: string; type: string }> = {
+  processing: { label: '处置中', type: 'warning' },
+  completed: { label: '已结束', type: 'success' },
+}
+
+const disposalPlanStatusMap = Object.fromEntries(
+  Object.entries(DisposalPlanStatusLabel).map(([key, label]) => [
     key,
-    { label, type: IncidentStatusTagType[key as IncidentStatusValue] },
+    { label, type: DisposalPlanStatusTagType[key as DisposalPlanStatusValue] },
+  ])
+)
+
+const resourceDispatchStatusMap = Object.fromEntries(
+  Object.entries(ResourceDispatchStatusLabel).map(([key, label]) => [
+    key,
+    { label, type: ResourceDispatchStatusTagType[key as ResourceDispatchStatusValue] },
   ])
 )
 
@@ -42,7 +55,6 @@ async function loadData(): Promise<void> {
     size: pageSize.value,
     disasterType: filters.disasterType || undefined,
     incidentLevel: filters.incidentLevel || undefined,
-    status: filters.status || undefined,
     keyword: filters.keyword || undefined,
   })
 }
@@ -66,14 +78,25 @@ function handleSearch(): void {
 function resetFilters(): void {
   filters.disasterType = ''
   filters.incidentLevel = ''
-  filters.status = ''
   filters.keyword = ''
   currentPage.value = 1
   loadData()
 }
 
-function viewDetail(id: string): void {
-  router.push(`/incident/${id}`)
+
+function handleAction(row: { incidentId: string; resourceDispatchStatus: string | null; disposalPlanStatus: string | null; status: string }): void {
+  if (authStore.roleName === 'ADMIN' && row.resourceDispatchStatus === 'shortage') {
+    router.push(`/incident/${row.incidentId}?mode=shortage`)
+  } else {
+    router.push(`/incident/${row.incidentId}`)
+  }
+}
+
+function getActionLabel(row: { resourceDispatchStatus: string | null; disposalPlanStatus: string | null }): string {
+  if (authStore.roleName === 'ADMIN' && row.resourceDispatchStatus === 'shortage') {
+    return '资源调度'
+  }
+  return '查看'
 }
 
 onMounted(() => {
@@ -85,7 +108,7 @@ onMounted(() => {
   <div class="incident-list page-container">
     <div class="page-header">
       <h2 class="page-header__title">事件列表</h2>
-      <el-button type="primary" @click="router.push('/incident/report')">
+      <el-button v-if="authStore.roleName === 'VIEWER'" type="primary" @click="router.push('/incident/report')">
         <el-icon><Plus /></el-icon>
         新增上报
       </el-button>
@@ -101,11 +124,6 @@ onMounted(() => {
         <el-form-item label="事件等级">
           <el-select v-model="filters.incidentLevel" placeholder="全部" clearable style="width: 140px">
             <el-option v-for="opt in levelOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="filters.status" placeholder="全部" clearable style="width: 120px">
-            <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="搜索">
@@ -134,12 +152,34 @@ onMounted(() => {
         <el-table-column prop="occurTime" label="发生时间" width="180" />
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <StatusTag :status="row.status" :status-map="statusMap" />
+            <StatusTag :status="row.status" :status-map="incidentStatusMap" />
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="authStore.roleName === 'OPERATOR' || authStore.roleName === 'RESOURCE_MANAGER' || authStore.roleName === 'ADMIN'"
+          prop="disposalPlanStatus"
+          label="处置方案状态"
+          width="130"
+        >
+          <template #default="{ row }">
+            <StatusTag v-if="row.disposalPlanStatus && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'rejected' || row.disposalPlanStatus === 'accepted')" :status="row.disposalPlanStatus" :status-map="disposalPlanStatusMap" />
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="authStore.roleName === 'RESOURCE_MANAGER' || authStore.roleName === 'ADMIN'"
+          prop="resourceDispatchStatus"
+          label="资源调度状态"
+          width="130"
+        >
+          <template #default="{ row }">
+            <StatusTag v-if="row.resourceDispatchStatus && (row.resourceDispatchStatus === 'executing' || row.resourceDispatchStatus === 'shortage' || row.resourceDispatchStatus === 'completed')" :status="row.resourceDispatchStatus" :status-map="resourceDispatchStatusMap" />
+            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="viewDetail(row.incidentId)">查看详情</el-button>
+            <el-button link type="primary" @click="handleAction(row)">{{ getActionLabel(row) }}</el-button>
           </template>
         </el-table-column>
       </el-table>

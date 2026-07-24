@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
-import { mockPlugin } from './src/mock'
+import { mockPlugin } from './src/mock/index.js'
 
 export default defineConfig({
   plugins: [vue(), mockPlugin()],

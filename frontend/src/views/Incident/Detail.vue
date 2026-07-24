@@ -1,32 +1,193 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useIncidentStore } from '@/stores/incident'
+import { useAuthStore } from '@/stores/auth'
+import { useDisposalPlanStore } from '@/stores/disposal-plan'
+import { useResourceStore } from '@/stores/resource'
 import StatusTag from '@/components/StatusTag.vue'
+import ResourceSearchItem from '@/components/ResourceSearchItem.vue'
 import {
   DisasterTypeLabel,
   IncidentLevelLabel,
-  IncidentStatusLabel,
-  IncidentStatusTagType,
+  DisposalPlanStatusLabel,
+  DisposalPlanStatusTagType,
 } from '@/types/enums'
-import type { DisasterTypeValue, IncidentLevelValue, IncidentStatusValue } from '@/types/enums'
+import type { DisasterTypeValue, IncidentLevelValue, DisposalPlanStatusValue } from '@/types/enums'
 import { formatDate } from '@/utils/format'
+import { ElMessage, ElMessageBox } from 'element-plus'
+
+interface SearchItem {
+  id: number
+  selectedResourceId: string
+  increaseQuantity: number
+}
 
 const route = useRoute()
 const router = useRouter()
 const incidentStore = useIncidentStore()
+const authStore = useAuthStore()
+const disposalPlanStore = useDisposalPlanStore()
+const resourceStore = useResourceStore()
 
-const statusMap = Object.fromEntries(
-  Object.entries(IncidentStatusLabel).map(([key, label]) => [
+const dispatchQuantity = ref<number>(0)
+const selectedResourceId = ref('')
+
+const statusMap: Record<string, { label: string; type: string }> = {
+  processing: { label: '处置中', type: 'warning' },
+  completed: { label: '已结束', type: 'success' },
+}
+
+const disposalPlanStatusMap = Object.fromEntries(
+  Object.entries(DisposalPlanStatusLabel).map(([key, label]) => [
     key,
-    { label, type: IncidentStatusTagType[key as IncidentStatusValue] },
+    { label, type: DisposalPlanStatusTagType[key as DisposalPlanStatusValue] },
   ])
 )
 
 const incidentId = route.params.id as string
+const isShortageMode = computed(() => route.query.mode === 'shortage' && authStore.roleName === 'ADMIN')
 
-onMounted(() => {
-  incidentStore.fetchDetail(incidentId)
+const searchItems = ref<SearchItem[]>([{ id: 1, selectedResourceId: '', increaseQuantity: 0 }])
+let searchItemIdCounter = 1
+
+const canCreateDisposalPlan = computed(() => {
+  const role = authStore.roleName
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return role === 'OPERATOR' && !dpStatus
+})
+
+const canRecreateDisposalPlan = computed(() => {
+  const role = authStore.roleName
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return role === 'OPERATOR' && dpStatus === 'rejected'
+})
+
+const canDispatchResource = computed(() => {
+  const role = authStore.roleName
+  const status = incidentStore.currentIncident?.status
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return role === 'RESOURCE_MANAGER' && status !== 'completed' && dpStatus === 'submitted'
+})
+
+const canRejectPlan = computed(() => {
+  const role = authStore.roleName
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return role === 'RESOURCE_MANAGER' && dpStatus === 'submitted'
+})
+
+const canShowRejectedTip = computed(() => {
+  const role = authStore.roleName
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return role === 'RESOURCE_MANAGER' && dpStatus === 'rejected'
+})
+
+const imageList = computed<string[]>(() => {
+  const raw = incidentStore.currentIncident?.imageUrls
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+})
+
+function addSearchItem(): void {
+  searchItemIdCounter++
+  searchItems.value.push({ id: searchItemIdCounter, selectedResourceId: '', increaseQuantity: 0 })
+}
+
+function removeSearchItem(id: number): void {
+  if (searchItems.value.length <= 1) return
+  searchItems.value = searchItems.value.filter((item) => item.id !== id)
+}
+
+function handleIncreaseConfirm(resourceId: string, quantity: number): void {
+  const res = resourceStore.resourceList.find((r) => r.resourceId === resourceId)
+  if (!res) return
+  const currentDispatched = res.dispatchedCount ?? 0
+  if (currentDispatched + quantity > res.quantity) {
+    ElMessage.warning(`该资源数量不足，请前往资源调度页面增加该资源总数`)
+    return
+  }
+  res.dispatchedCount = currentDispatched + quantity
+  ElMessage.success(`已增加 ${res.name} 调度数${quantity}，当前已调度：${res.dispatchedCount}`)
+}
+
+async function handleRejectShortage(): Promise<void> {
+  try {
+    await ElMessageBox.confirm('确认驳回该资源不足申请？', '驳回申请', {
+      confirmButtonText: '确认驳回',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    ElMessage.success('已驳回资源不足申请')
+    router.push('/incident')
+  } catch {
+    return
+  }
+}
+
+async function handleRejectPlan(): Promise<void> {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入驳回原因', '驳回处置方案', {
+      confirmButtonText: '确认驳回',
+      cancelButtonText: '取消',
+      inputPattern: /.+/,
+      inputErrorMessage: '驳回原因不能为空',
+    })
+    let planId = disposalPlanStore.currentDisposalPlan?.id
+    if (!planId && disposalPlanStore.disposalPlanList.length > 0) {
+      planId = disposalPlanStore.disposalPlanList[0].id
+      disposalPlanStore.currentDisposalPlan = disposalPlanStore.disposalPlanList[0]
+    }
+    if (planId) {
+      await disposalPlanStore.rejectDisposalPlan(planId, value, incidentId)
+      ElMessage.success('方案已驳回')
+      await incidentStore.fetchDetail(incidentId)
+      await disposalPlanStore.fetchList(incidentId)
+      if (disposalPlanStore.disposalPlanList.length > 0) {
+        disposalPlanStore.currentDisposalPlan = disposalPlanStore.disposalPlanList[0]
+      }
+    } else {
+      ElMessage.error('未找到关联的处置方案')
+    }
+  } catch {
+    return
+  }
+}
+
+function handleRequestResource(): void {
+  router.push(`/resource-request/${incidentId}`)
+}
+
+async function handleDispatchResource(): Promise<void> {
+  if (!selectedResourceId.value || dispatchQuantity.value <= 0) {
+    ElMessage.warning('请选择资源并输入分配数量')
+    return
+  }
+  const res = resourceStore.resourceList.find((r) => r.resourceId === selectedResourceId.value)
+  if (!res) return
+  const currentDispatched = res.dispatchedCount ?? 0
+  if (currentDispatched + dispatchQuantity.value > res.quantity) {
+    ElMessage.warning(`可用数量不足！${res.name}总数${res.quantity}，已调度${currentDispatched}，最多可分配${res.quantity - currentDispatched}。请前往资源调度界面增加资源总数`)
+    return
+  }
+  ElMessage.success('资源调度指令已提交')
+  selectedResourceId.value = ''
+  dispatchQuantity.value = 0
+}
+
+onMounted(async () => {
+  await incidentStore.fetchDetail(incidentId)
+  await disposalPlanStore.fetchList(incidentId)
+  if (disposalPlanStore.disposalPlanList.length > 0) {
+    disposalPlanStore.currentDisposalPlan = disposalPlanStore.disposalPlanList[0]
+  } else {
+    disposalPlanStore.currentDisposalPlan = null
+  }
+  resourceStore.fetchList()
 })
 </script>
 
@@ -56,32 +217,146 @@ onMounted(() => {
             <StatusTag :status="incidentStore.currentIncident.status" :status-map="statusMap" />
           </el-descriptions-item>
           <el-descriptions-item label="发生时间">
-            {{ formatDate(incidentStore.currentIncident.occurTime) }}
+            {{ incidentStore.currentIncident.occurTime ? formatDate(incidentStore.currentIncident.occurTime) : '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="发生地点">
             {{ incidentStore.currentIncident.location }}
+          </el-descriptions-item>
+          <el-descriptions-item label="死亡人数">
+            {{ incidentStore.currentIncident.deathCount ?? '未填写' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="财产损失（万元）">
+            {{ incidentStore.currentIncident.propertyLoss ?? '未填写' }}
           </el-descriptions-item>
           <el-descriptions-item label="上报人">
             {{ incidentStore.currentIncident.reporterId }}
           </el-descriptions-item>
           <el-descriptions-item label="上报时间">
-            {{ formatDate(incidentStore.currentIncident.reportTime) }}
+            {{ incidentStore.currentIncident.reportTime ? formatDate(incidentStore.currentIncident.reportTime) : '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="事件描述" :span="2">
             {{ incidentStore.currentIncident.description }}
           </el-descriptions-item>
         </el-descriptions>
 
-        <div class="incident-detail__images" v-if="incidentStore.currentIncident.imageUrls?.length">
+        <div class="incident-detail__actions" v-if="canCreateDisposalPlan">
+          <el-button type="primary" @click="router.push(`/plan?incidentId=${incidentId}`)">拟定处置方案</el-button>
+        </div>
+
+        <el-card
+          v-if="incidentStore.currentIncident.disposalPlanStatus !== null"
+          shadow="hover"
+          class="incident-detail__disposal-plan"
+        >
+          <template #header>
+            <div class="incident-detail__disposal-plan-header">
+              <span>处置方案</span>
+              <StatusTag
+                :status="incidentStore.currentIncident.disposalPlanStatus!"
+                :status-map="disposalPlanStatusMap"
+              />
+            </div>
+          </template>
+          <p v-if="disposalPlanStore.currentDisposalPlan?.planContent">
+            {{ disposalPlanStore.currentDisposalPlan.planContent.substring(0, 200) }}{{ disposalPlanStore.currentDisposalPlan.planContent.length > 200 ? '...' : '' }}
+          </p>
+          <p v-else>暂无方案内容</p>
+          <div v-if="incidentStore.currentIncident.disposalPlanStatus === 'rejected'" class="incident-detail__reject-info">
+            <p>驳回原因：{{ disposalPlanStore.currentDisposalPlan?.rejectReason ?? '未填写' }}</p>
+            <el-button v-if="canRecreateDisposalPlan" type="primary" size="small" @click="router.push(`/plan?incidentId=${incidentId}`)">重新拟定</el-button>
+          </div>
+        </el-card>
+
+        <el-card
+          v-if="isShortageMode"
+          shadow="hover"
+          class="incident-detail__shortage"
+        >
+          <template #header>
+            <div class="incident-detail__shortage-header">
+              <span>资源不足处理</span>
+              <el-button type="danger" size="small" @click="handleRejectShortage">驳回申请</el-button>
+            </div>
+          </template>
+          <div class="incident-detail__search-list">
+            <div
+              v-for="item in searchItems"
+              :key="item.id"
+              class="incident-detail__search-row"
+            >
+              <ResourceSearchItem
+                :resource-list="resourceStore.resourceList"
+                v-model="item.selectedResourceId"
+                v-model:increase-quantity="item.increaseQuantity"
+                @confirm="handleIncreaseConfirm"
+              />
+              <el-button
+                v-if="searchItems.length > 1"
+                type="danger"
+                link
+                style="margin-left: 8px"
+                @click="removeSearchItem(item.id)"
+              >删除</el-button>
+            </div>
+          </div>
+          <el-button type="primary" plain @click="addSearchItem" style="margin-top: 8px">增加资源</el-button>
+        </el-card>
+
+        <el-card
+          v-if="canDispatchResource"
+          shadow="hover"
+          class="incident-detail__dispatch"
+        >
+          <template #header>
+            <span>资源调度分配</span>
+          </template>
+          <el-form inline>
+            <el-form-item label="选择资源">
+              <el-select v-model="selectedResourceId" placeholder="请选择资源" style="width: 280px">
+                <el-option
+                  v-for="res in resourceStore.resourceList"
+                  :key="res.resourceId"
+                  :label="`${res.name}（总数${res.quantity}，已调度${res.dispatchedCount ?? 0}，可分配${res.quantity - (res.dispatchedCount ?? 0)}）`"
+                  :value="res.resourceId"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="分配数量">
+              <el-input-number v-model="dispatchQuantity" :min="1" :step="1" :precision="0" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="handleDispatchResource">提交调度</el-button>
+              <el-button type="primary" plain @click="handleRequestResource">请求资源</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <div class="incident-detail__actions" v-if="canRejectPlan">
+          <el-button type="danger" @click="handleRejectPlan">驳回方案</el-button>
+        </div>
+
+        <el-alert
+          v-if="canShowRejectedTip"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="incident-detail__rejected-tip"
+        >
+          <template #title>
+            已驳回方案，等待再次提交
+          </template>
+        </el-alert>
+
+        <div class="incident-detail__images" v-if="authStore.roleName === 'RESOURCE_MANAGER' || authStore.roleName === 'OPERATOR' || imageList.length">
           <h3>现场图片</h3>
-          <div class="incident-detail__image-list">
+          <div v-if="imageList.length" class="incident-detail__image-list">
             <el-image
-              v-for="(url, index) in incidentStore.currentIncident.imageUrls"
+              v-for="(url, index) in imageList"
               :key="index"
               :src="url"
               fit="cover"
               class="incident-detail__image"
-              :preview-src-list="incidentStore.currentIncident.imageUrls"
+              :preview-src-list="imageList"
               :initial-index="index"
             >
               <template #error>
@@ -92,23 +367,7 @@ onMounted(() => {
               </template>
             </el-image>
           </div>
-        </div>
-
-        <div class="incident-detail__attachments" v-if="incidentStore.currentIncident.attachments?.length">
-          <h3>附件列表</h3>
-          <el-table :data="incidentStore.currentIncident.attachments" stripe>
-            <el-table-column prop="fileName" label="文件名" />
-            <el-table-column prop="fileSize" label="文件大小" width="120">
-              <template #default="{ row }">
-                {{ (row.fileSize / 1024).toFixed(1) }} KB
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="100">
-              <template #default="{ row }">
-                <el-link type="primary" :href="row.fileUrl" target="_blank">下载</el-link>
-              </template>
-            </el-table-column>
-          </el-table>
+          <p v-else class="incident-detail__no-images">未上传图片</p>
         </div>
       </template>
     </el-card>
@@ -116,6 +375,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.incident-detail__actions {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border-light);
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
 .incident-detail__images {
   margin-top: var(--spacing-lg);
 }
@@ -150,12 +417,57 @@ onMounted(() => {
   gap: var(--spacing-xs);
 }
 
-.incident-detail__attachments {
-  margin-top: var(--spacing-lg);
+.incident-detail__disposal-plan {
+  margin-top: var(--spacing-md);
 }
 
-.incident-detail__attachments h3 {
-  font-size: var(--font-size-lg);
-  margin-bottom: var(--spacing-md);
+.incident-detail__disposal-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.incident-detail__reject-info {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
+}
+
+.incident-detail__shortage {
+  margin-top: var(--spacing-md);
+}
+
+.incident-detail__shortage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.incident-detail__search-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.incident-detail__search-row {
+  display: flex;
+  align-items: center;
+}
+
+.incident-detail__dispatch {
+  margin-top: var(--spacing-md);
+}
+
+.incident-detail__rejected-tip {
+  margin-top: var(--spacing-md);
+}
+
+.incident-detail__no-images {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  padding: var(--spacing-md) 0;
 }
 </style>

@@ -1,37 +1,40 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { UserInfo } from '@/types/user'
+import type { LoginParams, LoginResult, RegisterParams, UserInfo } from '@/types/user'
 import type { UserRoleValue } from '@/types/enums'
-import { login as loginApi } from '@/api/login'
-import type { LoginParams } from '@/types/user'
+import { login as loginApi, register as registerApi } from '@/api/login'
 import { setStoredToken, clearStoredToken } from '@/utils/token'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(null)
-  const userInfo = ref<UserInfo | null>(null)
+  const realName = ref<string>('')
+  const roleName = ref<UserRoleValue | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
-  const userRole = computed<UserRoleValue | null>(() => userInfo.value?.role ?? null)
+  const userRole = computed<UserRoleValue | null>(() => roleName.value)
 
   function setToken(newToken: string): void {
     token.value = newToken
     setStoredToken(newToken)
   }
 
-  function setUserInfo(info: UserInfo): void {
-    userInfo.value = info
-  }
-
   function clearAuth(): void {
     token.value = null
-    userInfo.value = null
+    realName.value = ''
+    roleName.value = null
     clearStoredToken()
   }
 
   async function login(params: LoginParams): Promise<void> {
-    const res = await loginApi(params) as unknown as { token: string; userInfo: UserInfo }
+    const res = (await loginApi(params)) as unknown as LoginResult
     setToken(res.token)
-    userInfo.value = res.userInfo
+    realName.value = res.realName
+    roleName.value = res.roleName as UserRoleValue
+  }
+
+  async function register(params: RegisterParams): Promise<UserInfo> {
+    const res = (await registerApi(params)) as unknown as UserInfo
+    return res
   }
 
   function logout(): void {
@@ -40,13 +43,14 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token,
-    userInfo,
+    realName,
+    roleName,
     isLoggedIn,
     userRole,
     setToken,
-    setUserInfo,
     clearAuth,
     login,
+    register,
     logout,
   }
 })

@@ -1,18 +1,31 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { usePlanStore } from '@/stores/plan'
 import { useIncidentStore } from '@/stores/incident'
-import { PlanStatusLabel } from '@/types/enums'
-import type { PlanStatusValue } from '@/types/enums'
+import { useDisposalPlanStore } from '@/stores/disposal-plan'
+import { PlanStatusLabel, PlanStatusTagType, DisposalPlanStatusLabel, DisposalPlanStatusTagType } from '@/types/enums'
+import type { PlanStatusValue, DisposalPlanStatusValue } from '@/types/enums'
 import { ElMessage } from 'element-plus'
 import { formatDate } from '@/utils/format'
+import StatusTag from '@/components/StatusTag.vue'
 
+const route = useRoute()
 const planStore = usePlanStore()
 const incidentStore = useIncidentStore()
+const disposalPlanStore = useDisposalPlanStore()
 
 const selectedIncidentId = ref('')
 const selectedPlanId = ref('')
-const timeoutTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const streamMode = ref(false)
+const editableContent = ref('')
+
+const disposalPlanStatusMap = Object.fromEntries(
+  Object.entries(DisposalPlanStatusLabel).map(([key, label]) => [
+    key,
+    { label, type: DisposalPlanStatusTagType[key as DisposalPlanStatusValue] },
+  ])
+)
 
 async function loadIncidents(): Promise<void> {
   await incidentStore.fetchList({ page: 1, size: 100 })
@@ -22,6 +35,7 @@ async function loadPlans(): Promise<void> {
   if (!selectedIncidentId.value) return
   selectedPlanId.value = ''
   planStore.currentPlan = null
+  editableContent.value = ''
   await planStore.fetchList(selectedIncidentId.value)
 }
 
@@ -30,36 +44,85 @@ async function handleGenerate(): Promise<void> {
     ElMessage.warning('请先选择灾情事件')
     return
   }
+  streamMode.value = true
+  editableContent.value = ''
+  planStore.startStream(selectedIncidentId.value)
+  const stopWatch = watch(() => planStore.streaming, (newVal, oldVal) => {
+    if (oldVal === true && newVal === false) {
+      if (planStore.streamingContent) {
+        ElMessage.success('方案已生成完毕')
+      } else {
+        ElMessage.error('连接已断开，已保存已接收的内容')
+      }
+      stopWatch()
+    }
+  })
+}
 
-  timeoutTimer.value = setTimeout(() => {
-    ElMessage.error('方案生成超时，请稍后重试')
-    planStore.generating = false
-  }, 60000)
-
-  const planId = await planStore.generate(selectedIncidentId.value)
-
-  if (timeoutTimer.value) {
-    clearTimeout(timeoutTimer.value)
-    timeoutTimer.value = null
-  }
-
-  if (planId) {
-    ElMessage.success('方案生成成功')
-    selectedPlanId.value = planId
-    await planStore.fetchDetail(planId)
-    await planStore.fetchList(selectedIncidentId.value)
-  } else if (!planStore.generating) {
-    ElMessage.error('方案生成失败，请稍后重试')
+function handleStopStream(): void {
+  planStore.stopStream()
+  streamMode.value = false
+  if (selectedIncidentId.value) {
+    planStore.fetchList(selectedIncidentId.value)
   }
 }
 
 async function selectPlan(planId: string): Promise<void> {
+  streamMode.value = false
   selectedPlanId.value = planId
   await planStore.fetchDetail(planId)
+  editableContent.value = planStore.currentPlan?.planContent || ''
 }
+
+async function handleSaveDraft(): Promise<void> {
+  if (!editableContent.value.trim()) {
+    ElMessage.warning('方案内容不能为空')
+    return
+  }
+  try {
+    await disposalPlanStore.saveDisposalPlan(
+      planStore.currentPlan?.id ?? 0,
+      editableContent.value,
+      selectedIncidentId.value
+    )
+    ElMessage.success('草稿已保存')
+    if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+  } catch {
+    ElMessage.error('草稿保存失败，请重试')
+  }
+}
+
+async function handleSubmitDisposalPlan(): Promise<void> {
+  if (!editableContent.value.trim()) {
+    ElMessage.warning('方案内容不能为空，请先拟定处置方案')
+    return
+  }
+  try {
+    await disposalPlanStore.submitDisposalPlan(
+      planStore.currentPlan?.id ?? 0,
+      editableContent.value,
+      selectedIncidentId.value
+    )
+    ElMessage.success('处置方案已提交给资源管理员')
+    if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+  } catch {
+    ElMessage.error('提交失败，请稍后重试')
+  }
+}
+
+watch(() => planStore.streamingContent, (val) => {
+  if (planStore.streaming) {
+    editableContent.value = val
+  }
+})
 
 onMounted(() => {
   loadIncidents()
+  const incidentId = route.query.incidentId as string | undefined
+  if (incidentId) {
+    selectedIncidentId.value = incidentId
+    loadPlans()
+  }
 })
 </script>
 
@@ -89,10 +152,17 @@ onMounted(() => {
         <el-form-item>
           <el-button
             type="primary"
-            :loading="planStore.generating"
+            :loading="planStore.streaming"
             @click="handleGenerate"
           >
-            {{ planStore.generating ? '生成中...' : '生成新方案' }}
+            {{ planStore.streaming ? '生成中...' : '生成' }}
+          </el-button>
+          <el-button
+            v-if="planStore.streaming"
+            type="danger"
+            @click="handleStopStream"
+          >
+            停止
           </el-button>
         </el-form-item>
       </el-form>
@@ -113,8 +183,8 @@ onMounted(() => {
         >
           <div class="plan-page__item-title">{{ plan.planTitle }}</div>
           <div class="plan-page__item-meta">
-            <span>{{ formatDate(plan.generateTime, 'YYYY-MM-DD HH:mm') }}</span>
-            <el-tag size="small" :type="plan.status === 'approved' ? 'success' : plan.status === 'rejected' ? 'danger' : 'info'">
+            <span>{{ plan.generateTime ? formatDate(plan.generateTime, 'YYYY-MM-DD HH:mm') : '-' }}</span>
+            <el-tag size="small" :type="PlanStatusTagType[plan.status as PlanStatusValue] ?? 'info'">
               {{ PlanStatusLabel[plan.status as PlanStatusValue] ?? plan.status }}
             </el-tag>
           </div>
@@ -123,19 +193,53 @@ onMounted(() => {
 
       <el-card shadow="hover" class="plan-page__detail">
         <template #header>
-          <span>方案详情</span>
-        </template>
-        <div v-if="!planStore.currentPlan" class="plan-page__empty">请选择或生成方案</div>
-        <div v-else class="plan-page__content">
-          <h3>{{ planStore.currentPlan.planTitle }}</h3>
-          <div class="plan-page__content-meta">
-            <span>生成时间：{{ formatDate(planStore.currentPlan.generateTime) }}</span>
-            <el-tag size="small" :type="planStore.currentPlan.status === 'approved' ? 'success' : planStore.currentPlan.status === 'rejected' ? 'danger' : 'info'">
-              {{ PlanStatusLabel[planStore.currentPlan.status as PlanStatusValue] }}
-            </el-tag>
+          <div class="plan-page__detail-header">
+            <div class="plan-page__detail-header-left">
+              <span>方案详情</span>
+              <StatusTag
+                v-if="planStore.currentPlan"
+                :status="planStore.currentPlan.status"
+                :status-map="disposalPlanStatusMap"
+              />
+            </div>
           </div>
-          <el-divider />
-          <div class="plan-page__content-body" v-html="planStore.currentPlan.planContent" />
+        </template>
+
+        <div v-if="streamMode && planStore.streaming" class="plan-page__stream">
+          <div class="plan-page__stream-content">
+            <el-input
+              v-model="editableContent"
+              type="textarea"
+              :rows="20"
+              readonly
+              placeholder="方案生成中..."
+            />
+            <span class="plan-page__cursor">|</span>
+          </div>
+        </div>
+
+        <div v-else-if="!planStore.currentPlan && !editableContent" class="plan-page__empty">请选择或生成方案</div>
+        <div v-else>
+          <template v-if="planStore.currentPlan">
+            <h3>{{ planStore.currentPlan.planTitle }}</h3>
+            <div class="plan-page__content-meta">
+              <span>生成时间：{{ planStore.currentPlan.generateTime ? formatDate(planStore.currentPlan.generateTime) : '-' }}</span>
+              <el-tag size="small" :type="PlanStatusTagType[planStore.currentPlan.status as PlanStatusValue] ?? 'info'">
+                {{ PlanStatusLabel[planStore.currentPlan.status as PlanStatusValue] }}
+              </el-tag>
+            </div>
+            <el-divider />
+          </template>
+          <el-input
+            v-model="editableContent"
+            type="textarea"
+            :rows="20"
+            placeholder="方案内容（可直接编辑）"
+          />
+          <div class="plan-page__draft-submit-area" v-if="editableContent">
+            <el-button type="primary" plain @click="handleSaveDraft">保存草稿</el-button>
+            <el-button type="primary" @click="handleSubmitDisposalPlan">确认提交</el-button>
+          </div>
         </div>
       </el-card>
     </div>
@@ -192,7 +296,46 @@ onMounted(() => {
   color: var(--color-text-secondary);
 }
 
-.plan-page__content h3 {
+.plan-page__detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.plan-page__detail-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.plan-page__actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.plan-page__stream {
+  min-height: 300px;
+  padding: var(--spacing-md);
+}
+
+.plan-page__stream-content {
+  display: flex;
+  align-items: flex-start;
+}
+
+.plan-page__cursor {
+  animation: blink 1s step-end infinite;
+  color: var(--color-primary);
+  font-weight: bold;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.plan-page__detail h3 {
   font-size: var(--font-size-xl);
   margin-bottom: var(--spacing-sm);
 }
@@ -205,8 +348,12 @@ onMounted(() => {
   color: var(--color-text-secondary);
 }
 
-.plan-page__content-body {
-  line-height: 1.8;
-  color: var(--color-text-regular);
+.plan-page__draft-submit-area {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border-light);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
 }
 </style>

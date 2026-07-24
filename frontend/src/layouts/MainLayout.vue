@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppHeader from './components/AppHeader.vue'
 import AppSidebar from './components/AppSidebar.vue'
 
+const route = useRoute()
 const sidebarCollapsed = ref(false)
+const contentRef = ref<HTMLElement>()
 
 function toggleSidebar(): void {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
+
+watch(() => route.path, () => {
+  if (contentRef.value) {
+    contentRef.value.scrollTop = 0
+  }
+})
 </script>
 
 <template>
@@ -15,12 +24,8 @@ function toggleSidebar(): void {
     <AppSidebar :collapsed="sidebarCollapsed" />
     <div class="main-layout__right" :class="{ 'main-layout__right--collapsed': sidebarCollapsed }">
       <AppHeader @toggle-sidebar="toggleSidebar" />
-      <main class="main-layout__content">
-        <RouterView v-slot="{ Component }">
-          <Transition name="slide-fade" mode="out-in">
-            <component :is="Component" />
-          </Transition>
-        </RouterView>
+      <main ref="contentRef" class="main-layout__content">
+        <RouterView />
       </main>
     </div>
   </div>

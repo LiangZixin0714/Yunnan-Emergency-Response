@@ -1,34 +1,36 @@
-import type { DisasterTypeValue, IncidentLevelValue, IncidentStatusValue } from './enums'
-
-export interface Attachment {
-  fileName: string
-  fileUrl: string
-  fileSize: number
-}
+import type { DisasterTypeValue, IncidentLevelValue, IncidentStatusValue, DisposalPlanStatusValue, DispatchOrderStatusValue } from './enums'
 
 export interface Incident {
+  id: number
   incidentId: string
   incidentName: string
   disasterType: DisasterTypeValue
   incidentLevel: IncidentLevelValue
-  occurTime: string
-  location: string
-  description: string
+  occurTime: string | null
+  location: string | null
+  description: string | null
   status: IncidentStatusValue
-  attachments: Attachment[]
-  imageUrls: string[]
-  reporterId: string
-  reportTime: string
+  imageUrls: string | null
+  reporterId: number | null
+  reportTime: string | null
+  deathCount: number | null
+  propertyLoss: number | null
+  disposalPlanStatus: DisposalPlanStatusValue | null
+  resourceDispatchStatus: DispatchOrderStatusValue | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface IncidentReportData {
   incidentName: string
   disasterType: DisasterTypeValue
-  incidentLevel: IncidentLevelValue
-  occurTime: string
-  location: string
-  description: string
-  images: File[]
+  incidentLevel?: IncidentLevelValue
+  occurTime?: string
+  location?: string
+  description?: string
+  deathCount?: number
+  propertyLoss?: number
+  images?: File[]
 }
 
 export interface IncidentReportResult {

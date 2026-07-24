@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useIncidentStore } from '@/stores/incident'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { DisasterType, DisasterTypeLabel, IncidentLevel, IncidentLevelLabel, IMAGE_ACCEPT_STRING } from '@/types/enums'
+import { DisasterTypeLabel, IncidentLevelLabel, IMAGE_ACCEPT_STRING } from '@/types/enums'
 import type { DisasterTypeValue, IncidentLevelValue } from '@/types/enums'
 import FileUpload from '@/components/FileUpload.vue'
 
@@ -21,6 +21,8 @@ const form = reactive({
   occurTime: '',
   location: '',
   description: '',
+  deathCount: null as number | null,
+  propertyLoss: null as number | null,
 })
 
 const rules: FormRules = {
@@ -65,6 +67,8 @@ async function handleSubmit(): Promise<void> {
       occurTime: form.occurTime,
       location: form.location,
       description: form.description,
+      deathCount: form.deathCount ?? undefined,
+      propertyLoss: form.propertyLoss ?? undefined,
       images: files.value,
     })
     ElMessage.success('灾情上报成功')
@@ -138,6 +142,14 @@ async function handleSubmit(): Promise<void> {
             :rows="4"
             placeholder="请输入事件描述"
           />
+        </el-form-item>
+
+        <el-form-item label="死亡人数">
+          <el-input-number v-model="form.deathCount" :min="0" :step="1" :precision="0" placeholder="选填" />
+        </el-form-item>
+
+        <el-form-item label="财产损失/万元">
+          <el-input-number v-model="form.propertyLoss" :min="0" :step="0.01" :precision="2" placeholder="选填" />
         </el-form-item>
 
         <el-form-item label="现场图片">

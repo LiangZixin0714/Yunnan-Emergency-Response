@@ -1,10 +1,15 @@
 import type { UserRoleValue } from './enums'
 
 export interface UserInfo {
-  userId: string
+  id: number
   username: string
-  realName: string
-  role: UserRoleValue
+  email: string | null
+  phone: string | null
+  realName: string | null
+  roleId: number
+  status: number
+  createdAt: string
+  updatedAt: string
 }
 
 export interface LoginParams {
@@ -14,5 +19,15 @@ export interface LoginParams {
 
 export interface LoginResult {
   token: string
-  userInfo: UserInfo
+  tokenType: string
+  expiresIn: number
+  username: string
+  realName: string
+  roleName: UserRoleValue
+}
+
+export interface RegisterParams {
+  username: string
+  password: string
+  realName?: string
 }

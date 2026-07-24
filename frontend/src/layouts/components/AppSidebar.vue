@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import { computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import type { UserRoleValue } from '@/types/enums'
 
 defineProps<{
   collapsed: boolean
@@ -8,11 +10,32 @@ defineProps<{
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const menuItems = computed(() => {
   const mainRoute = router.options.routes.find((r) => r.path === '/')
   if (!mainRoute?.children) return []
-  return mainRoute.children.filter((child) => child.meta?.hidden !== true)
+  const role = authStore.roleName
+  return mainRoute.children.filter((child) => {
+    if (child.meta?.hidden === true) return false
+    const roles = child.meta?.roles as UserRoleValue[] | undefined
+    if (!roles) return true
+    return role ? roles.includes(role) : false
+  }).map((child) => {
+    if (!child.children) return child
+    return {
+      ...child,
+      children: child.children.filter((sub) => {
+        if (sub.meta?.hidden === true) return false
+        const subRoles = sub.meta?.roles as UserRoleValue[] | undefined
+        if (!subRoles) return true
+        return role ? subRoles.includes(role) : false
+      }),
+    }
+  }).filter((child) => {
+    if (child.children && child.children.length === 0) return false
+    return true
+  })
 })
 
 const activeMenu = computed(() => {
@@ -48,7 +71,7 @@ function handleMenuSelect(index: string): void {
             <span>{{ item.meta?.title }}</span>
           </template>
           <el-menu-item
-            v-for="child in item.children.filter((c) => c.meta?.hidden !== true)"
+            v-for="child in item.children"
             :key="child.path"
             :index="'/' + item.path + '/' + child.path"
           >

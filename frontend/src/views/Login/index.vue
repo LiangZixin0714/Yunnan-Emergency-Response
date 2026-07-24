@@ -3,6 +3,7 @@ import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
+import { User, Lock } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 
 const router = useRouter()
@@ -80,6 +81,11 @@ async function handleLogin(): Promise<void> {
           >
             登 录
           </el-button>
+        </el-form-item>
+        <el-form-item>
+          <div style="width: 100%; text-align: center">
+            <el-button link type="primary" @click="router.push('/register')">没有账号？立即注册</el-button>
+          </div>
         </el-form-item>
       </el-form>
     </div>

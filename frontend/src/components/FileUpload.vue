@@ -81,7 +81,7 @@ onUnmounted(() => {
 
     <div v-if="imageMode && modelValue.length" class="file-upload__images">
       <div
-        v-for="(file, index) in modelValue"
+        v-for="(_file, index) in modelValue"
         :key="index"
         class="file-upload__image-item"
       >

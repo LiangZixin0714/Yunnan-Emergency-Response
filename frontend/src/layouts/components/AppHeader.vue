@@ -25,11 +25,11 @@ function handleLogout(): void {
       <h1 class="app-header__title">云南自然灾害应急协同决策平台</h1>
     </div>
     <div class="app-header__right">
-      <span class="app-header__user" v-if="authStore.userInfo">
+      <span class="app-header__user" v-if="authStore.isLoggedIn">
         <el-icon><User /></el-icon>
-        {{ authStore.userInfo.realName }}
-        <el-tag size="small" type="info" class="app-header__role">
-          {{ UserRoleLabel[authStore.userInfo.role] }}
+        {{ authStore.realName }}
+        <el-tag size="small" type="info" class="app-header__role" v-if="authStore.roleName">
+          {{ UserRoleLabel[authStore.roleName] }}
         </el-tag>
       </span>
       <el-button text @click="handleLogout">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, toRaw } from 'vue'
 import * as echarts from 'echarts/core'
 import { LineChart, PieChart, MapChart, ScatterChart } from 'echarts/charts'
 import {
@@ -26,37 +26,39 @@ echarts.use([
 ])
 
 const props = defineProps<{
-  option: EChartsOption
+  option: EChartsOption | Record<string, any>
   loading?: boolean
 }>()
 
 const chartRef = ref<HTMLDivElement>()
 let chartInstance: echarts.ECharts | null = null
+let disposed = false
 
 function initChart(): void {
-  if (!chartRef.value) return
+  if (!chartRef.value || disposed) return
   chartInstance = echarts.init(chartRef.value)
-  chartInstance.setOption(props.option)
+  chartInstance.setOption(toRaw(props.option))
 }
 
 function handleResize(): void {
-  chartInstance?.resize()
+  if (!disposed && chartInstance) {
+    chartInstance.resize()
+  }
 }
 
 watch(
   () => props.option,
   (newOption) => {
-    if (chartInstance) {
-      chartInstance.setOption(newOption, true)
+    if (!disposed && chartInstance) {
+      chartInstance.setOption(toRaw(newOption), true)
     }
-  },
-  { deep: true }
+  }
 )
 
 watch(
   () => props.loading,
   (val) => {
-    if (chartInstance) {
+    if (!disposed && chartInstance) {
       val ? chartInstance.showLoading() : chartInstance.hideLoading()
     }
   }
@@ -67,10 +69,17 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
+  disposed = true
   window.removeEventListener('resize', handleResize)
-  chartInstance?.dispose()
-  chartInstance = null
+  if (chartInstance) {
+    try {
+      chartInstance.dispose()
+    } catch {
+      // ignore dispose errors
+    }
+    chartInstance = null
+  }
 })
 </script>
 
