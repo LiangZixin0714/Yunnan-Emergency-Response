@@ -26,15 +26,29 @@ REQUIRED_SECTIONS = [
     "事件概况",
     "风险评估",
     "处置目标",
-    "资源部署",
+    "资源调度建议",
     "应急措施",
-    "保障措施"
+    "保障措施",
+    "资源部署"  # 兼容旧版本
 ]
 
 
 def _check_sections(plan: str) -> Dict[str, bool]:
-    """基于规则检查方案是否包含必需章节。"""
-    return {section: section in plan for section in REQUIRED_SECTIONS}
+    """基于规则检查方案是否包含必需章节。
+    
+    兼容新旧版本："资源调度建议" 和 "资源部署" 任一存在即可。
+    """
+    results = {}
+    for section in REQUIRED_SECTIONS:
+        if section == "资源部署":
+            # 资源部署是旧版本，只要资源调度建议存在也视为通过
+            results[section] = "资源部署" in plan or "资源调度建议" in plan
+        elif section == "资源调度建议":
+            # 资源调度建议是新版本，只要任一存在即可
+            results[section] = "资源调度建议" in plan or "资源部署" in plan
+        else:
+            results[section] = section in plan
+    return results
 
 
 def _build_prompt(plan: str) -> str:
