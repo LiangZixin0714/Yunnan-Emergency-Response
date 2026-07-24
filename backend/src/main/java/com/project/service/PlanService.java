@@ -1,16 +1,25 @@
 package com.project.service;
 
+import com.project.annotation.SystemAuditLog;
 import com.project.entity.mysql.Incident;
 import com.project.entity.mysql.Plan;
 import com.project.repository.mysql.IncidentRepository;
 import com.project.repository.mysql.PlanRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,13 +32,23 @@ public class PlanService {
 
     private static final Logger logger = LoggerFactory.getLogger(PlanService.class);
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
+    
+    private static final String AI_SERVICE_BASE_URL = "http://localhost:8002";
+    private static final String AI_SYNC_API = "/api/v1/generate-plan";
+    private static final String AI_STREAM_API = "/api/v1/generate-plan/stream";
+    private static final int SSE_CHUNK_SIZE = 10;
+    private static final int SSE_SLEEP_MS = 50;
 
     private final PlanRepository planRepository;
     private final IncidentRepository incidentRepository;
+    private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
     public PlanService(PlanRepository planRepository, IncidentRepository incidentRepository) {
         this.planRepository = planRepository;
         this.incidentRepository = incidentRepository;
+        this.restClient = RestClient.create(AI_SERVICE_BASE_URL);
+        this.objectMapper = new ObjectMapper();
     }
 
     @Transactional("mysqlTransactionManager")
@@ -37,10 +56,12 @@ public class PlanService {
         Incident incident = incidentRepository.findByIncidentId(incidentId)
                 .orElseThrow(() -> new IllegalArgumentException("灾情不存在"));
 
+        String planContent;
         try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            planContent = callSyncApi(incident);
+        } catch (Exception e) {
+            logger.error("调用外部API失败，使用Mock数据", e);
+            planContent = generateMockPlanContent(incident);
         }
 
         String planId = UUID.randomUUID().toString();
@@ -49,7 +70,7 @@ public class PlanService {
         plan.setPlanId(planId);
         plan.setIncidentId(incidentId);
         plan.setPlanTitle("应急预案 - " + incident.getIncidentName());
-        plan.setPlanContent(generateMockPlanContent(incident));
+        plan.setPlanContent(planContent);
         plan.setStatus("draft");
 
         planRepository.save(plan);
@@ -69,34 +90,89 @@ public class PlanService {
         return planRepository.findByIncidentId(incidentId);
     }
 
+    @Transactional("mysqlTransactionManager")
+    @SystemAuditLog(module = "plan", action = "review", actionType = "UPDATE")
+    public Plan reviewPlan(String planId, String action, String modifyContent, String remark) {
+        Plan plan = planRepository.findByPlanId(planId)
+                .orElseThrow(() -> new IllegalArgumentException("方案不存在"));
+
+        switch (action.toUpperCase()) {
+            case "APPROVE":
+                plan.setStatus("approved");
+                break;
+            case "REJECT":
+                plan.setStatus("rejected");
+                break;
+            case "MODIFY":
+                if (modifyContent != null && !modifyContent.isEmpty()) {
+                    plan.setPlanContent(modifyContent);
+                }
+                plan.setStatus("modified");
+                break;
+            default:
+                throw new IllegalArgumentException("无效的审核操作: " + action);
+        }
+
+        planRepository.save(plan);
+        logger.info("方案审核完成，planId: {}, action: {}, status: {}", planId, action, plan.getStatus());
+        return plan;
+    }
+
     public SseEmitter streamPlan(String incidentId) {
-        SseEmitter emitter = new SseEmitter(60000L);
+        SseEmitter emitter = new SseEmitter(300000L);
 
         executorService.execute(() -> {
+            Incident incident = incidentRepository.findByIncidentId(incidentId).orElse(null);
+            String description = buildDescription(incident);
+
             try {
-                String planContent = generateMockPlanContent(null);
-                int chunkSize = 10;
-                
-                for (int i = 0; i < planContent.length(); i += chunkSize) {
-                    int end = Math.min(i + chunkSize, planContent.length());
-                    String chunk = planContent.substring(i, end);
-                    
+                logger.info("开始生成应急预案，incidentId: {}", incidentId);
+                logger.info("灾情描述: {}", description);
+
+                String planContent;
+                try {
+                    planContent = callSyncApi(incident);
+                    logger.info("AI服务返回方案长度: {}", planContent != null ? planContent.length() : 0);
+                } catch (Exception e) {
+                    logger.error("调用AI服务失败，使用Mock数据", e);
+                    planContent = generateMockPlanContent(incident);
+                }
+
+                if (planContent == null || planContent.isEmpty()) {
+                    logger.error("方案内容为空");
                     emitter.send(SseEmitter.event()
-                            .name("message")
-                            .data(chunk));
-                    
-                    Thread.sleep(100);
+                            .name("error")
+                            .data("生成应急预案失败，请稍后重试"));
+                    emitter.complete();
+                    return;
+                }
+
+                char[] chars = planContent.toCharArray();
+                for (int i = 0; i < chars.length; i++) {
+                    try {
+                        emitter.send(SseEmitter.event()
+                                .name("message")
+                                .data(String.valueOf(chars[i])));
+                        Thread.sleep(SSE_SLEEP_MS);
+                    } catch (IOException e) {
+                        logger.error("发送SSE数据失败", e);
+                        break;
+                    }
                 }
 
                 emitter.complete();
                 logger.info("SSE stream completed for incident: {}", incidentId);
-            } catch (IOException e) {
-                emitter.completeWithError(e);
-                logger.error("SSE stream error", e);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                emitter.completeWithError(e);
-                logger.warn("SSE stream interrupted");
+
+            } catch (Exception e) {
+                logger.error("生成应急预案失败，incidentId: {}", incidentId, e);
+                try {
+                    emitter.send(SseEmitter.event()
+                            .name("error")
+                            .data("生成应急预案失败，请稍后重试"));
+                } catch (IOException ioEx) {
+                    logger.error("发送错误消息失败", ioEx);
+                }
+                emitter.complete();
             }
         });
 
@@ -105,6 +181,53 @@ public class PlanService {
         emitter.onError(e -> logger.error("SSE emitter error", e));
 
         return emitter;
+    }
+
+    private String callSyncApi(Incident incident) throws Exception {
+        String description = buildDescription(incident);
+        
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("description", description);
+
+        String response = restClient.post()
+                .uri(AI_SYNC_API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(requestBody)
+                .retrieve()
+                .body(String.class);
+
+        JsonNode rootNode = objectMapper.readTree(response);
+        JsonNode planNode = rootNode.get("plan");
+        
+        if (planNode != null && !planNode.isNull()) {
+            return planNode.asText();
+        }
+        
+        logger.warn("外部API返回结果中未找到plan字段");
+        return null;
+    }
+
+    private String buildDescription(Incident incident) {
+        if (incident == null) {
+            return "灾情信息";
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("灾害类型：").append(incident.getDisasterType());
+        
+        if (incident.getLocation() != null && !incident.getLocation().isEmpty()) {
+            sb.append("，发生地点：").append(incident.getLocation());
+        }
+        
+        if (incident.getDescription() != null && !incident.getDescription().isEmpty()) {
+            sb.append("，灾情描述：").append(incident.getDescription());
+        }
+        
+        if (incident.getIncidentLevel() != null && !incident.getIncidentLevel().isEmpty()) {
+            sb.append("，灾情级别：").append(incident.getIncidentLevel());
+        }
+        
+        return sb.toString();
     }
 
     private String generateMockPlanContent(Incident incident) {

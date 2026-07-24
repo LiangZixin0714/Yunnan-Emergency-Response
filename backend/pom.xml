@@ -18,7 +18,7 @@
     <description>云南自然灾害应急协同决策平台</description>
 
     <properties>
-        <java.version>21</java.version>
+        <java.version>23</java.version>
         <jjwt.version>0.12.5</jjwt.version>
         <hibernate-spatial.version>6.4.4.Final</hibernate-spatial.version>
         <spring-cloud.version>2023.0.1</spring-cloud.version>
@@ -50,6 +50,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
         <dependency>
@@ -109,7 +114,17 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.30</version>
+            <version>1.18.34</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
 
         <dependency>
