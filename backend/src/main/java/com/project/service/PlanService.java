@@ -1,5 +1,6 @@
 package com.project.service;
 
+import com.project.annotation.SystemAuditLog;
 import com.project.entity.mysql.Incident;
 import com.project.entity.mysql.Plan;
 import com.project.repository.mysql.IncidentRepository;
@@ -87,6 +88,34 @@ public class PlanService {
 
     public List<Plan> getPlansByIncidentId(String incidentId) {
         return planRepository.findByIncidentId(incidentId);
+    }
+
+    @Transactional("mysqlTransactionManager")
+    @SystemAuditLog(module = "plan", action = "review", actionType = "UPDATE")
+    public Plan reviewPlan(String planId, String action, String modifyContent, String remark) {
+        Plan plan = planRepository.findByPlanId(planId)
+                .orElseThrow(() -> new IllegalArgumentException("方案不存在"));
+
+        switch (action.toUpperCase()) {
+            case "APPROVE":
+                plan.setStatus("approved");
+                break;
+            case "REJECT":
+                plan.setStatus("rejected");
+                break;
+            case "MODIFY":
+                if (modifyContent != null && !modifyContent.isEmpty()) {
+                    plan.setPlanContent(modifyContent);
+                }
+                plan.setStatus("modified");
+                break;
+            default:
+                throw new IllegalArgumentException("无效的审核操作: " + action);
+        }
+
+        planRepository.save(plan);
+        logger.info("方案审核完成，planId: {}, action: {}, status: {}", planId, action, plan.getStatus());
+        return plan;
     }
 
     public SseEmitter streamPlan(String incidentId) {

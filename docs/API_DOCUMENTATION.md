@@ -377,3 +377,303 @@ generatePlan('云南省昆明市五华区发生4.5级地震，震源深度10公�
 | 表名 | knowledge_chunks |
 | 向量维度 | 512 |
 | Embedding 模型 | BAAI/bge-small-zh-v1.5 |
+
+---
+
+# 云南自然灾害应急协同决策平台 - 后端 API 接口文档
+
+## 8. 后端接口列表
+
+### 8.1 资源调度接口
+
+#### 8.1.1 查询可用资源
+
+**GET /api/resource/available**
+
+查询当前可用库存大于0的应急资源列表。
+
+**请求头**:
+| 字段 | 值 | 必填 |
+|------|-----|------|
+| Authorization | Bearer `<token>` | 是 |
+
+**请求参数**: 无
+
+**响应体**:
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": [
+        {
+            "id": 1,
+            "resourceId": "RES001",
+            "resourceName": "帐篷",
+            "resourceType": "物资",
+            "totalStock": 1000,
+            "availableStock": 850,
+            "lockedStock": 150,
+            "location": "昆明市储备库",
+            "unit": "顶",
+            "status": "available",
+            "createdAt": "2024-01-15T10:00:00",
+            "updatedAt": "2024-01-20T14:30:00"
+        }
+    ]
+}
+```
+
+**响应体字段说明**:
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | integer | 自增ID |
+| resourceId | string | 资源唯一标识 |
+| resourceName | string | 资源名称 |
+| resourceType | string | 资源类型 |
+| totalStock | integer | 总库存 |
+| availableStock | integer | 可用库存 |
+| lockedStock | integer | 已锁定库存 |
+| location | string | 存放位置 |
+| unit | string | 计量单位 |
+| status | string | 状态 |
+
+---
+
+#### 8.1.2 锁定资源
+
+**POST /api/resource/lock**
+
+锁定并分配资源（使用 Redis 分布式锁防止并发重复调度）。
+
+**请求头**:
+| 字段 | 值 | 必填 |
+|------|-----|------|
+| Authorization | Bearer `<token>` | 是 |
+| Content-Type | application/json | 是 |
+
+**请求体**:
+```json
+{
+    "resourceId": "RES001",
+    "quantity": 100,
+    "incidentId": "INC20240120001",
+    "planId": "PLAN20240120001",
+    "remark": "地震救援物资"
+}
+```
+
+**请求体字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| resourceId | string | 是 | 资源唯一标识 |
+| quantity | integer | 是 | 锁定数量，必须大于0 |
+| incidentId | string | 否 | 关联灾情ID |
+| planId | string | 否 | 关联方案ID |
+| remark | string | 否 | 备注说明 |
+
+**响应体**:
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "success": true,
+        "message": "资源锁定成功",
+        "resource": {
+            "id": 1,
+            "resourceId": "RES001",
+            "resourceName": "帐篷",
+            "availableStock": 750,
+            "lockedStock": 250
+        },
+        "recordId": "dispatch-record-uuid"
+    }
+}
+```
+
+**错误响应示例**:
+```json
+{
+    "code": -1,
+    "message": "可用库存不足，当前可用: 850",
+    "data": null
+}
+```
+
+---
+
+#### 8.1.3 释放资源
+
+**POST /api/resource/release**
+
+释放资源并归还库存。
+
+**请求头**:
+| 字段 | 值 | 必填 |
+|------|-----|------|
+| Authorization | Bearer `<token>` | 是 |
+| Content-Type | application/json | 是 |
+
+**请求体**:
+```json
+{
+    "resourceId": "RES001",
+    "quantity": 50,
+    "remark": "未使用物资归还"
+}
+```
+
+**请求体字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| resourceId | string | 是 | 资源唯一标识 |
+| quantity | integer | 是 | 释放数量，必须大于0 |
+| remark | string | 否 | 备注说明 |
+
+**响应体**:
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "success": true,
+        "message": "资源释放成功",
+        "resource": {
+            "id": 1,
+            "resourceId": "RES001",
+            "resourceName": "帐篷",
+            "availableStock": 800,
+            "lockedStock": 200
+        },
+        "recordId": "dispatch-record-uuid"
+    }
+}
+```
+
+---
+
+#### 8.1.4 查询调度记录
+
+**GET /api/resource/dispatch-records**
+
+查询资源调度记录列表。
+
+**请求头**:
+| 字段 | 值 | 必填 |
+|------|-----|------|
+| Authorization | Bearer `<token>` | 是 |
+
+**请求参数**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| resourceId | string | 否 | 按资源ID筛选 |
+| incidentId | string | 否 | 按灾情ID筛选 |
+
+**响应体**:
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": [
+        {
+            "id": 1,
+            "recordId": "dispatch-record-uuid",
+            "resourceId": "RES001",
+            "resourceName": "帐篷",
+            "incidentId": "INC20240120001",
+            "planId": "PLAN20240120001",
+            "dispatchType": "lock",
+            "quantity": 100,
+            "fromLocation": "昆明市储备库",
+            "toLocation": null,
+            "operatorId": 1,
+            "operatorName": "admin",
+            "status": "completed",
+            "remark": "地震救援物资",
+            "createdAt": "2024-01-20T15:00:00"
+        }
+    ]
+}
+```
+
+---
+
+### 8.2 方案审核接口
+
+#### 8.2.1 审核方案
+
+**POST /api/plan/review**
+
+针对 AI 生成的应急预案进行人工审核。
+
+**请求头**:
+| 字段 | 值 | 必填 |
+|------|-----|------|
+| Authorization | Bearer `<token>` | 是 |
+| Content-Type | application/json | 是 |
+
+**请求体**:
+```json
+{
+    "planId": "PLAN20240120001",
+    "action": "APPROVE",
+    "modifyContent": null,
+    "remark": "方案合理，同意执行"
+}
+```
+
+**请求体字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| planId | string | 是 | 方案唯一标识 |
+| action | string | 是 | 审核操作：APPROVE(通过)/REJECT(驳回)/MODIFY(修改) |
+| modifyContent | string | 否 | 修改后的方案内容（仅 action=MODIFY 时有效） |
+| remark | string | 否 | 审核备注 |
+
+**响应体**:
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "id": 5,
+        "planId": "PLAN20240120001",
+        "incidentId": "INC20240120001",
+        "planTitle": "应急预案 - 昆明地震",
+        "planContent": "...",
+        "status": "approved",
+        "createdAt": "2024-01-20T10:00:00",
+        "updatedAt": "2024-01-20T16:00:00"
+    }
+}
+```
+
+**action 枚举说明**:
+| 值 | 说明 | 更新后的状态 |
+|----|------|-------------|
+| APPROVE | 通过审核 | approved |
+| REJECT | 驳回审核 | rejected |
+| MODIFY | 修改方案 | modified |
+
+---
+
+### 8.3 统一响应规范
+
+所有后端接口遵循统一响应格式：
+
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {}
+}
+```
+
+**响应码说明**:
+| code | 含义 |
+|------|------|
+| 0 | 请求成功 |
+| -1 | 请求失败（业务异常） |
+| 401 | 未授权 |
+| 403 | 禁止访问 |
+| 500 | 服务器内部错误 |
