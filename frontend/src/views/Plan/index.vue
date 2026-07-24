@@ -1,30 +1,24 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlanStore } from '@/stores/plan'
 import { useIncidentStore } from '@/stores/incident'
-import { useAuthStore } from '@/stores/auth'
 import { useDisposalPlanStore } from '@/stores/disposal-plan'
 import { PlanStatusLabel, PlanStatusTagType, DisposalPlanStatusLabel, DisposalPlanStatusTagType } from '@/types/enums'
 import type { PlanStatusValue, DisposalPlanStatusValue } from '@/types/enums'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { formatDate } from '@/utils/format'
 import StatusTag from '@/components/StatusTag.vue'
 
 const route = useRoute()
 const planStore = usePlanStore()
 const incidentStore = useIncidentStore()
-const authStore = useAuthStore()
 const disposalPlanStore = useDisposalPlanStore()
 
 const selectedIncidentId = ref('')
 const selectedPlanId = ref('')
 const streamMode = ref(false)
-const isEditing = ref(false)
-const editedContent = ref('')
-const contentConfirmed = ref(false)
-
-const canEdit = ref(false)
+const editableContent = ref('')
 
 const disposalPlanStatusMap = Object.fromEntries(
   Object.entries(DisposalPlanStatusLabel).map(([key, label]) => [
@@ -32,12 +26,6 @@ const disposalPlanStatusMap = Object.fromEntries(
     { label, type: DisposalPlanStatusTagType[key as DisposalPlanStatusValue] },
   ])
 )
-
-function checkEditPermission(): void {
-  const role = authStore.roleName
-  const status = planStore.currentPlan?.status
-  canEdit.value = (role === 'OPERATOR' || role === 'ADMIN') && status === 'draft'
-}
 
 async function loadIncidents(): Promise<void> {
   await incidentStore.fetchList({ page: 1, size: 100 })
@@ -47,35 +35,28 @@ async function loadPlans(): Promise<void> {
   if (!selectedIncidentId.value) return
   selectedPlanId.value = ''
   planStore.currentPlan = null
-  contentConfirmed.value = false
+  editableContent.value = ''
   await planStore.fetchList(selectedIncidentId.value)
 }
 
-async function handleStreamGenerate(): Promise<void> {
+async function handleGenerate(): Promise<void> {
   if (!selectedIncidentId.value) {
     ElMessage.warning('请先选择灾情事件')
     return
   }
   streamMode.value = true
+  editableContent.value = ''
   planStore.startStream(selectedIncidentId.value)
-}
-
-async function handleSyncGenerate(): Promise<void> {
-  if (!selectedIncidentId.value) {
-    ElMessage.warning('请先选择灾情事件')
-    return
-  }
-
-  const planId = await planStore.generate(selectedIncidentId.value)
-
-  if (planId) {
-    ElMessage.success('方案生成成功')
-    selectedPlanId.value = planId
-    await planStore.fetchDetail(planId)
-    await planStore.fetchList(selectedIncidentId.value)
-  } else {
-    ElMessage.error('方案生成失败，请稍后重试')
-  }
+  const stopWatch = watch(() => planStore.streaming, (newVal, oldVal) => {
+    if (oldVal === true && newVal === false) {
+      if (planStore.streamingContent) {
+        ElMessage.success('方案已生成完毕')
+      } else {
+        ElMessage.error('连接已断开，已保存已接收的内容')
+      }
+      stopWatch()
+    }
+  })
 }
 
 function handleStopStream(): void {
@@ -88,66 +69,52 @@ function handleStopStream(): void {
 
 async function selectPlan(planId: string): Promise<void> {
   streamMode.value = false
-  isEditing.value = false
-  contentConfirmed.value = false
   selectedPlanId.value = planId
   await planStore.fetchDetail(planId)
-  checkEditPermission()
+  editableContent.value = planStore.currentPlan?.planContent || ''
 }
 
-function handleStartEdit(): void {
-  isEditing.value = true
-  editedContent.value = planStore.currentPlan?.planContent || ''
-}
-
-function handleSaveEdit(): void {
-  if (planStore.currentPlan) {
-    planStore.currentPlan.planContent = editedContent.value
+async function handleSaveDraft(): Promise<void> {
+  if (!editableContent.value.trim()) {
+    ElMessage.warning('方案内容不能为空')
+    return
   }
-  isEditing.value = false
-  ElMessage.success('编辑成功')
-  ElMessage.info('编辑功能需要后端接口支持（暂未实现持久化）')
-}
-
-function handleCancelEdit(): void {
-  isEditing.value = false
-}
-
-async function handleApprove(): Promise<void> {
-  if (!planStore.currentPlan) return
   try {
-    await ElMessageBox.confirm('确认审批通过该方案？', '审批确认', {
-      confirmButtonText: '通过',
-      cancelButtonText: '取消',
-      type: 'success',
-    })
-    planStore.currentPlan.status = 'approved'
-    ElMessage.success('方案已审批通过')
-  } catch { /* cancelled */ }
-}
-
-async function handleReject(): Promise<void> {
-  if (!planStore.currentPlan) return
-  try {
-    await ElMessageBox.confirm('确认驳回该方案？', '驳回确认', {
-      confirmButtonText: '驳回',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-    planStore.currentPlan.status = 'rejected'
-    ElMessage.success('方案已驳回')
-  } catch { /* cancelled */ }
+    await disposalPlanStore.saveDisposalPlan(
+      planStore.currentPlan?.id ?? 0,
+      editableContent.value,
+      selectedIncidentId.value
+    )
+    ElMessage.success('草稿已保存')
+    if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+  } catch {
+    ElMessage.error('草稿保存失败，请重试')
+  }
 }
 
 async function handleSubmitDisposalPlan(): Promise<void> {
-  if (!planStore.currentPlan) return
+  if (!editableContent.value.trim()) {
+    ElMessage.warning('方案内容不能为空，请先拟定处置方案')
+    return
+  }
   try {
-    await disposalPlanStore.submitDisposalPlan(planStore.currentPlan.id)
-    ElMessage.success('处置方案已提交')
+    await disposalPlanStore.submitDisposalPlan(
+      planStore.currentPlan?.id ?? 0,
+      editableContent.value,
+      selectedIncidentId.value
+    )
+    ElMessage.success('处置方案已提交给资源管理员')
+    if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
   } catch {
     ElMessage.error('提交失败，请稍后重试')
   }
 }
+
+watch(() => planStore.streamingContent, (val) => {
+  if (planStore.streaming) {
+    editableContent.value = val
+  }
+})
 
 onMounted(() => {
   loadIncidents()
@@ -186,15 +153,9 @@ onMounted(() => {
           <el-button
             type="primary"
             :loading="planStore.streaming"
-            @click="handleStreamGenerate"
+            @click="handleGenerate"
           >
-            {{ planStore.streaming ? '生成中...' : '流式生成' }}
-          </el-button>
-          <el-button
-            :loading="planStore.generating"
-            @click="handleSyncGenerate"
-          >
-            {{ planStore.generating ? '生成中...' : '同步生成' }}
+            {{ planStore.streaming ? '生成中...' : '生成' }}
           </el-button>
           <el-button
             v-if="planStore.streaming"
@@ -241,62 +202,44 @@ onMounted(() => {
                 :status-map="disposalPlanStatusMap"
               />
             </div>
-            <div v-if="planStore.currentPlan && planStore.currentPlan.status === 'draft' && !isEditing" class="plan-page__actions">
-              <el-button v-if="canEdit" size="small" @click="handleStartEdit">编辑</el-button>
-              <el-button type="success" size="small" @click="handleApprove">审批通过</el-button>
-              <el-button type="danger" size="small" @click="handleReject">驳回</el-button>
-            </div>
           </div>
         </template>
 
         <div v-if="streamMode && planStore.streaming" class="plan-page__stream">
           <div class="plan-page__stream-content">
-            <div class="plan-page__stream-text">{{ planStore.streamingContent }}</div>
+            <el-input
+              v-model="editableContent"
+              type="textarea"
+              :rows="20"
+              readonly
+              placeholder="方案生成中..."
+            />
             <span class="plan-page__cursor">|</span>
           </div>
         </div>
 
-        <div v-else-if="streamMode && planStore.streamingContent && !planStore.streaming" class="plan-page__stream">
-          <div class="plan-page__stream-content">
-            <div class="plan-page__stream-text">{{ planStore.streamingContent }}</div>
-          </div>
-        </div>
-
-        <div v-else-if="!planStore.currentPlan" class="plan-page__empty">请选择或生成方案</div>
-        <div v-else class="plan-page__content">
-          <h3>{{ planStore.currentPlan.planTitle }}</h3>
-          <div class="plan-page__content-meta">
-            <span>生成时间：{{ planStore.currentPlan.generateTime ? formatDate(planStore.currentPlan.generateTime) : '-' }}</span>
-            <el-tag size="small" :type="PlanStatusTagType[planStore.currentPlan.status as PlanStatusValue] ?? 'info'">
-              {{ PlanStatusLabel[planStore.currentPlan.status as PlanStatusValue] }}
-            </el-tag>
-          </div>
-          <el-divider />
-          <template v-if="isEditing">
-            <el-input
-              v-model="editedContent"
-              type="textarea"
-              :rows="20"
-              placeholder="请编辑预案内容"
-            />
-            <div class="plan-page__edit-actions">
-              <el-button type="primary" @click="handleSaveEdit">保存</el-button>
-              <el-button @click="handleCancelEdit">取消</el-button>
+        <div v-else-if="!planStore.currentPlan && !editableContent" class="plan-page__empty">请选择或生成方案</div>
+        <div v-else>
+          <template v-if="planStore.currentPlan">
+            <h3>{{ planStore.currentPlan.planTitle }}</h3>
+            <div class="plan-page__content-meta">
+              <span>生成时间：{{ planStore.currentPlan.generateTime ? formatDate(planStore.currentPlan.generateTime) : '-' }}</span>
+              <el-tag size="small" :type="PlanStatusTagType[planStore.currentPlan.status as PlanStatusValue] ?? 'info'">
+                {{ PlanStatusLabel[planStore.currentPlan.status as PlanStatusValue] }}
+              </el-tag>
             </div>
+            <el-divider />
           </template>
-          <template v-else>
-            <div class="plan-page__content-body" v-html="planStore.currentPlan.planContent" />
-            <div class="plan-page__submit-area" v-if="!isEditing && planStore.currentPlan.planContent">
-              <el-checkbox v-model="contentConfirmed">确认方案内容</el-checkbox>
-              <el-button
-                v-if="authStore.roleName === 'OPERATOR' && contentConfirmed && planStore.currentPlan"
-                type="primary"
-                @click="handleSubmitDisposalPlan"
-              >
-                提交处置方案
-              </el-button>
-            </div>
-          </template>
+          <el-input
+            v-model="editableContent"
+            type="textarea"
+            :rows="20"
+            placeholder="方案内容（可直接编辑）"
+          />
+          <div class="plan-page__draft-submit-area" v-if="editableContent">
+            <el-button type="primary" plain @click="handleSaveDraft">保存草稿</el-button>
+            <el-button type="primary" @click="handleSubmitDisposalPlan">确认提交</el-button>
+          </div>
         </div>
       </el-card>
     </div>
@@ -381,12 +324,6 @@ onMounted(() => {
   align-items: flex-start;
 }
 
-.plan-page__stream-text {
-  white-space: pre-wrap;
-  line-height: 1.8;
-  color: var(--color-text-regular);
-}
-
 .plan-page__cursor {
   animation: blink 1s step-end infinite;
   color: var(--color-primary);
@@ -398,7 +335,7 @@ onMounted(() => {
   50% { opacity: 0; }
 }
 
-.plan-page__content h3 {
+.plan-page__detail h3 {
   font-size: var(--font-size-xl);
   margin-bottom: var(--spacing-sm);
 }
@@ -411,23 +348,12 @@ onMounted(() => {
   color: var(--color-text-secondary);
 }
 
-.plan-page__content-body {
-  line-height: 1.8;
-  color: var(--color-text-regular);
-}
-
-.plan-page__edit-actions {
-  margin-top: var(--spacing-md);
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.plan-page__submit-area {
+.plan-page__draft-submit-area {
   margin-top: var(--spacing-md);
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--color-border-light);
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
 }
 </style>

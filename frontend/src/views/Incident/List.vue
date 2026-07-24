@@ -9,8 +9,10 @@ import {
   IncidentLevelLabel,
   DisposalPlanStatusLabel,
   DisposalPlanStatusTagType,
+  ResourceDispatchStatusLabel,
+  ResourceDispatchStatusTagType,
 } from '@/types/enums'
-import type { DisasterTypeValue, IncidentLevelValue, DisposalPlanStatusValue } from '@/types/enums'
+import type { DisasterTypeValue, IncidentLevelValue, DisposalPlanStatusValue, ResourceDispatchStatusValue } from '@/types/enums'
 
 const router = useRouter()
 const incidentStore = useIncidentStore()
@@ -40,10 +42,12 @@ const disposalPlanStatusMap = Object.fromEntries(
   ])
 )
 
-const resourceDispatchStatusMap: Record<string, { label: string; type: string }> = {
-  shortage: { label: '资源不足', type: 'danger' },
-  completed: { label: '已完成', type: 'success' },
-}
+const resourceDispatchStatusMap = Object.fromEntries(
+  Object.entries(ResourceDispatchStatusLabel).map(([key, label]) => [
+    key,
+    { label, type: ResourceDispatchStatusTagType[key as ResourceDispatchStatusValue] },
+  ])
+)
 
 async function loadData(): Promise<void> {
   await incidentStore.fetchList({
@@ -169,7 +173,7 @@ onMounted(() => {
           width="130"
         >
           <template #default="{ row }">
-            <StatusTag v-if="row.resourceDispatchStatus && (row.resourceDispatchStatus === 'shortage' || row.resourceDispatchStatus === 'completed')" :status="row.resourceDispatchStatus" :status-map="resourceDispatchStatusMap" />
+            <StatusTag v-if="row.resourceDispatchStatus && (row.resourceDispatchStatus === 'executing' || row.resourceDispatchStatus === 'shortage' || row.resourceDispatchStatus === 'completed')" :status="row.resourceDispatchStatus" :status-map="resourceDispatchStatusMap" />
             <span v-else>-</span>
           </template>
         </el-table-column>

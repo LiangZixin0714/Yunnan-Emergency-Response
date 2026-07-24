@@ -1,13 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Plan } from '@/types/plan'
-import { getPlanList, generatePlan, getPlanDetail, streamPlan } from '@/api/plan'
+import { getPlanList, getPlanDetail, streamPlan } from '@/api/plan'
 import { getStoredToken } from '@/utils/token'
 
 export const usePlanStore = defineStore('plan', () => {
   const planList = ref<Plan[]>([])
   const currentPlan = ref<Plan | null>(null)
-  const generating = ref(false)
+
   const streamingContent = ref('')
   const streaming = ref(false)
 
@@ -16,17 +16,6 @@ export const usePlanStore = defineStore('plan', () => {
     planList.value = res
   }
 
-  async function generate(incidentId: string): Promise<string | null> {
-    generating.value = true
-    try {
-      const res = await generatePlan(incidentId) as unknown as { planId: string }
-      return res.planId
-    } catch {
-      return null
-    } finally {
-      generating.value = false
-    }
-  }
 
   async function fetchDetail(planId: string): Promise<void> {
     const res = await getPlanDetail(planId) as unknown as Plan
@@ -54,11 +43,9 @@ export const usePlanStore = defineStore('plan', () => {
   return {
     planList,
     currentPlan,
-    generating,
     streamingContent,
     streaming,
     fetchList,
-    generate,
     fetchDetail,
     startStream,
     stopStream,

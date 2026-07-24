@@ -64,13 +64,19 @@ const routes: RouteRecordRaw[] = [
         path: 'plan',
         name: 'Plan',
         component: () => import('@/views/Plan/index.vue'),
-        meta: { title: 'AI方案生成', requiresAuth: true, icon: 'Document', roles: ['ADMIN', 'OPERATOR'] },
+        meta: { title: 'AI方案生成', requiresAuth: true, icon: 'Document', roles: ['OPERATOR'] },
       },
       {
         path: 'resource',
         name: 'Resource',
         component: () => import('@/views/Resource/index.vue'),
         meta: { title: '资源调度', requiresAuth: true, icon: 'Box', roles: ['ADMIN', 'RESOURCE_MANAGER'] },
+      },
+      {
+        path: 'resource-request/:incidentId',
+        name: 'ResourceRequest',
+        component: () => import('@/views/ResourceRequest/index.vue'),
+        meta: { title: '资源申请', requiresAuth: true, hidden: true, roles: ['RESOURCE_MANAGER'] },
       },
       {
         path: 'knowledge',

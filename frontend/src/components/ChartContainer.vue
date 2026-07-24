@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, toRaw } from 'vue'
 import * as echarts from 'echarts/core'
 import { LineChart, PieChart, MapChart, ScatterChart } from 'echarts/charts'
 import {
@@ -37,7 +37,7 @@ let disposed = false
 function initChart(): void {
   if (!chartRef.value || disposed) return
   chartInstance = echarts.init(chartRef.value)
-  chartInstance.setOption(props.option)
+  chartInstance.setOption(toRaw(props.option))
 }
 
 function handleResize(): void {
@@ -50,7 +50,7 @@ watch(
   () => props.option,
   (newOption) => {
     if (!disposed && chartInstance) {
-      chartInstance.setOption(newOption, true)
+      chartInstance.setOption(toRaw(newOption), true)
     }
   }
 )

@@ -184,6 +184,26 @@ export const DisposalPlanStatusTagType: Record<DisposalPlanStatusValue, string> 
   rejected: 'danger',
 }
 
+export const ResourceDispatchStatus = {
+  EXECUTING: 'executing',
+  SHORTAGE: 'shortage',
+  COMPLETED: 'completed',
+} as const
+
+export type ResourceDispatchStatusValue = (typeof ResourceDispatchStatus)[keyof typeof ResourceDispatchStatus]
+
+export const ResourceDispatchStatusLabel: Record<ResourceDispatchStatusValue, string> = {
+  executing: '调度中',
+  shortage: '资源不足',
+  completed: '已完成',
+}
+
+export const ResourceDispatchStatusTagType: Record<ResourceDispatchStatusValue, string> = {
+  executing: 'info',
+  shortage: 'danger',
+  completed: 'success',
+}
+
 export const ApplicationStatus = {
   PENDING: 'pending',
   APPROVED: 'approved',

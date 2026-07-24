@@ -42,8 +42,11 @@ let incidentIdCounter = 0
 
 let mockRoleApplications: Record<string, any>[] = []
 let mockDisposalPlans: Record<string, any>[] = []
+let mockPlans: Record<string, any>[] = []
 let mockShortageWarnings: Record<string, any>[] = []
+let mockResourceRequests: Record<string, any>[] = []
 let roleAppIdCounter = 0
+let planIdCounter = 0
 
 interface LinkedStatus {
   status: string
@@ -53,14 +56,19 @@ interface LinkedStatus {
 
 function generateLinkedStatus(): LinkedStatus {
   const r = Math.random()
-  if (r < 0.30) {
+  if (r < 0.25) {
     return { status: 'processing', disposalPlanStatus: null, resourceDispatchStatus: null }
-  } else if (r < 0.55) {
-    const rd = Math.random() < 0.4 ? 'shortage' : (Math.random() < 0.5 ? 'completed' : null)
+  } else if (r < 0.50) {
+    const rdRand = Math.random()
+    let rd: string | null
+    if (rdRand < 0.20) rd = 'executing'
+    else if (rdRand < 0.45) rd = 'shortage'
+    else if (rdRand < 0.70) rd = 'completed'
+    else rd = null
     return { status: 'processing', disposalPlanStatus: 'submitted', resourceDispatchStatus: rd }
-  } else if (r < 0.75) {
+  } else if (r < 0.70) {
     return { status: 'completed', disposalPlanStatus: 'accepted', resourceDispatchStatus: 'completed' }
-  } else if (r < 0.90) {
+  } else if (r < 0.85) {
     return { status: 'processing', disposalPlanStatus: 'rejected', resourceDispatchStatus: 'shortage' }
   } else {
     return { status: 'processing', disposalPlanStatus: 'submitted', resourceDispatchStatus: null }
@@ -134,12 +142,20 @@ function initMockData(): void {
     { id: 6, disposalPlanId: 'dp-006', incidentId: 'mock-0008', planContent: '一、灾情概况\n森林火灾发生在丽江市某林区。\n二、响应措施\n1. 组织扑火队伍\n2. 设置防火隔离带\n3. 疏散周边群众', status: 'submitted', submittedBy: 2, submittedAt: '2026-07-22T16:00:00', rejectReason: null, createdAt: '2026-07-22T15:00:00', updatedAt: '2026-07-22T16:00:00' },
   ]
 
+  planIdCounter = 2
+  mockPlans = [
+    { id: 1, planId: 'plan-001', incidentId: 'mock-0001', planTitle: '地震应急方案-初版', planContent: '一、灾情概况\n本次地震发生在云南省某地区，震级5.2级。\n\n二、响应措施\n1. 立即启动Ⅲ级应急响应\n2. 组织救援队伍赶赴现场\n3. 设置临时安置点\n4. 开展伤员救治\n\n三、资源调配\n调配救援队伍3支、医疗物资若干、运输车辆10台。', generateTime: '2026-07-20T10:30:00', status: 'approved', createdAt: '2026-07-20T10:30:00', updatedAt: '2026-07-20T10:30:00' },
+    { id: 2, planId: 'plan-002', incidentId: 'mock-0001', planTitle: '地震应急方案-修订版', planContent: '一、灾情更新\n根据最新灾情评估，调整响应级别为Ⅱ级。\n\n二、调整措施\n1. 提升应急响应级别至Ⅱ级\n2. 增派救援力量\n3. 扩大疏散范围', generateTime: '2026-07-21T14:00:00', status: 'draft', createdAt: '2026-07-21T14:00:00', updatedAt: '2026-07-21T14:00:00' },
+  ]
+
 
   mockShortageWarnings = [
     { id: 1, warningId: 'sw-001', incidentId: 'mock-0001', orderId: 'dispatch-0001', resourceType: 'team', requiredQuantity: 50, availableQuantity: 20, shortageQuantity: 30, reportedBy: 3, reportedAt: '2026-07-22T10:00:00', status: 'pending', handledBy: null, handledAt: null, handleResult: null },
     { id: 2, warningId: 'sw-002', incidentId: 'mock-0003', orderId: 'dispatch-0002', resourceType: 'medical', requiredQuantity: 200, availableQuantity: 80, shortageQuantity: 120, reportedBy: 3, reportedAt: '2026-07-22T11:00:00', status: 'pending', handledBy: null, handledAt: null, handleResult: null },
     { id: 3, warningId: 'sw-003', incidentId: 'mock-0005', orderId: 'dispatch-0001', resourceType: 'vehicle', requiredQuantity: 15, availableQuantity: 5, shortageQuantity: 10, reportedBy: 3, reportedAt: '2026-07-22T14:00:00', status: 'replenished', handledBy: 1, handledAt: '2026-07-22T16:00:00', handleResult: 'replenished' },
   ]
+
+  mockResourceRequests = []
 }
 initMockData()
 
@@ -250,16 +266,19 @@ export function mockPlugin() {
         }
 
         if (url === '/api/plan/list') {
-          res.end(JSON.stringify(success([
-            { id: 1, planId: 'plan-001', incidentId: 'mock-0001', planTitle: '地震应急方案-初版', planContent: '一、灾情概况\n本次地震发生在云南省某地区，震级5.2级。\n\n二、响应措施\n1. 立即启动Ⅲ级应急响应\n2. 组织救援队伍赶赴现场\n3. 设置临时安置点\n4. 开展伤员救治\n\n三、资源调配\n调配救援队伍3支、医疗物资若干、运输车辆10台。', generateTime: '2026-07-20T10:30:00', status: 'approved', createdAt: '2026-07-20T10:30:00', updatedAt: '2026-07-20T10:30:00' },
-            { id: 2, planId: 'plan-002', incidentId: 'mock-0001', planTitle: '地震应急方案-修订版', planContent: '一、灾情更新\n根据最新灾情评估，调整响应级别为Ⅱ级。\n\n二、调整措施\n1. 提升应急响应级别至Ⅱ级\n2. 增派救援力量\n3. 扩大疏散范围', generateTime: '2026-07-21T14:00:00', status: 'draft', createdAt: '2026-07-21T14:00:00', updatedAt: '2026-07-21T14:00:00' },
-          ]))); return
+          const p = new URL(req.url, 'http://localhost').searchParams
+          const incidentId = p.get('incidentId')
+          let filtered = [...mockPlans]
+          if (incidentId) filtered = filtered.filter((pl) => pl.incidentId === incidentId)
+          res.end(JSON.stringify(success(filtered))); return
         }
         if (url === '/api/plan/generate' && req.method === 'POST') {
           res.end(JSON.stringify(success({ planId: `plan-${Date.now()}` }))); return
         }
         if (url === '/api/plan/detail') {
-          res.end(JSON.stringify(success({ id: 1, planId: 'plan-001', incidentId: 'mock-0001', planTitle: '地震应急方案', planContent: '一、灾情概况\n本次地震发生在云南省某地区，震级5.2级。\n\n二、响应措施\n1. 启动应急响应\n2. 组织救援\n3. 设置安置点', generateTime: '2026-07-20T10:30:00', status: 'approved', createdAt: '2026-07-20T10:30:00', updatedAt: '2026-07-20T10:30:00' }))); return
+          const id = new URL(req.url, 'http://localhost').searchParams.get('planId')
+          const plan = mockPlans.find((pl) => pl.planId === id)
+          res.end(JSON.stringify(success(plan || null))); return
         }
         if (url === '/api/plan/stream') {
           res.setHeader('Content-Type', 'text/event-stream'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('Connection', 'keep-alive')
@@ -357,34 +376,205 @@ export function mockPlugin() {
 
         if (url === '/api/disposal-plan/list') {
           const p = new URL(req.url, 'http://localhost').searchParams
+          const incidentId = p.get('incidentId')
           let filtered = [...mockDisposalPlans]
-          if (p.get('incidentId')) filtered = filtered.filter((d) => d.incidentId === p.get('incidentId'))
+          if (incidentId) {
+            filtered = filtered.filter((d) => d.incidentId === incidentId)
+            if (filtered.length === 0) {
+              const incident = mockIncidents.find((i: any) => i.incidentId === incidentId)
+              if (incident && (incident as any).disposalPlanStatus) {
+                const now = new Date().toISOString()
+                const autoPlan = {
+                  id: mockDisposalPlans.length + 1,
+                  disposalPlanId: `dp-auto-${String(mockDisposalPlans.length + 1).padStart(4, '0')}`,
+                  incidentId,
+                  planContent: '一、灾情概况\n根据上报信息，该地区发生自然灾害。\n二、响应措施\n1. 启动应急响应\n2. 组织救援队伍\n3. 设置临时安置点',
+                  status: (incident as any).disposalPlanStatus,
+                  submittedBy: 2,
+                  submittedAt: (incident as any).disposalPlanStatus !== 'draft' ? now : null,
+                  rejectReason: (incident as any).disposalPlanStatus === 'rejected' ? '方案内容需要补充' : null,
+                  createdAt: now,
+                  updatedAt: now,
+                }
+                mockDisposalPlans.push(autoPlan)
+                filtered = [autoPlan]
+              }
+            }
+          }
           res.end(JSON.stringify(success(filtered))); return
         }
 
         if (url === '/api/disposal-plan/submit' && req.method === 'POST') {
           const body = await parseBody(req)
-          const plan = mockDisposalPlans.find((d) => d.id === body.id)
-          if (!plan) { res.end(JSON.stringify(error('处置方案不存在'))); return }
-          if (plan.status !== 'draft') { res.end(JSON.stringify(error('仅草稿状态的方案可以提交'))); return }
+          let plan = mockDisposalPlans.find((d) => d.id === body.id)
           const now = new Date().toISOString()
-          plan.status = 'submitted'
-          plan.submittedBy = body.submittedBy || 2
-          plan.submittedAt = now
-          plan.updatedAt = now
+          if (!plan) {
+            plan = {
+              id: mockDisposalPlans.length + 1,
+              disposalPlanId: `dp-${String(mockDisposalPlans.length + 1).padStart(3, '0')}`,
+              incidentId: body.incidentId || 'mock-0001',
+              planContent: body.planContent || '',
+              status: 'submitted',
+              submittedBy: body.submittedBy || 2,
+              submittedAt: now,
+              rejectReason: null,
+              createdAt: now,
+              updatedAt: now,
+            }
+            mockDisposalPlans.push(plan)
+            planIdCounter++
+            const newPlan = {
+              id: planIdCounter,
+              planId: `plan-${String(planIdCounter).padStart(3, '0')}`,
+              incidentId: body.incidentId || 'mock-0001',
+              planTitle: `AI生成方案-${String(planIdCounter).padStart(3, '0')}`,
+              planContent: body.planContent || '',
+              generateTime: now,
+              status: 'submitted',
+              createdAt: now,
+              updatedAt: now,
+            }
+            mockPlans.push(newPlan)
+          } else {
+            if (plan!.status !== 'draft' && plan!.status !== 'rejected') { res.end(JSON.stringify(error('仅草稿或已驳回状态的方案可以提交'))); return }
+            if (body.planContent) plan!.planContent = body.planContent
+            plan!.status = 'submitted'
+            plan!.submittedBy = body.submittedBy || 2
+            plan!.submittedAt = now
+            plan!.updatedAt = now
+            const linkedPlan = mockPlans.find((pl) => pl.incidentId === plan!.incidentId && pl.planContent === plan!.planContent)
+            if (linkedPlan) {
+              linkedPlan.planContent = plan!.planContent
+              linkedPlan.status = 'submitted'
+              linkedPlan.updatedAt = now
+            }
+          }
+          res.end(JSON.stringify(success(plan))); return
+        }
+
+        if (url === '/api/disposal-plan/save-draft' && req.method === 'POST') {
+          const body = await parseBody(req)
+          let plan = mockDisposalPlans.find((d) => d.id === body.id)
+          const now = new Date().toISOString()
+          if (!plan) {
+            plan = {
+              id: mockDisposalPlans.length + 1,
+              disposalPlanId: `dp-${String(mockDisposalPlans.length + 1).padStart(3, '0')}`,
+              incidentId: body.incidentId || 'mock-0001',
+              planContent: body.planContent || '',
+              status: 'draft',
+              submittedBy: null,
+              submittedAt: null,
+              rejectReason: null,
+              createdAt: now,
+              updatedAt: now,
+            }
+            mockDisposalPlans.push(plan)
+            planIdCounter++
+            const newPlan = {
+              id: planIdCounter,
+              planId: `plan-${String(planIdCounter).padStart(3, '0')}`,
+              incidentId: body.incidentId || 'mock-0001',
+              planTitle: `AI生成方案-${String(planIdCounter).padStart(3, '0')}`,
+              planContent: body.planContent || '',
+              generateTime: now,
+              status: 'draft',
+              createdAt: now,
+              updatedAt: now,
+            }
+            mockPlans.push(newPlan)
+          } else {
+            plan!.planContent = body.planContent || plan!.planContent
+            plan!.status = 'draft'
+            plan!.updatedAt = now
+            const linkedPlan = mockPlans.find((pl) => pl.incidentId === plan!.incidentId && pl.planContent === plan!.planContent)
+            if (linkedPlan) {
+              linkedPlan.planContent = plan!.planContent
+              linkedPlan.status = 'draft'
+              linkedPlan.updatedAt = now
+            }
+          }
           res.end(JSON.stringify(success(plan))); return
         }
 
         if (url === '/api/disposal-plan/reject' && req.method === 'POST') {
           const body = await parseBody(req)
-          const plan = mockDisposalPlans.find((d) => d.id === body.id)
+          let plan = mockDisposalPlans.find((d) => d.id === body.id)
+          if (!plan && body.incidentId) {
+            const incident = mockIncidents.find((i: any) => i.incidentId === body.incidentId)
+            if (incident && (incident as any).disposalPlanStatus === 'submitted') {
+              const now = new Date().toISOString()
+              plan = {
+                id: mockDisposalPlans.length + 1,
+                disposalPlanId: `dp-reject-${String(mockDisposalPlans.length + 1).padStart(4, '0')}`,
+                incidentId: body.incidentId,
+                planContent: '一、灾情概况\n根据上报信息，该地区发生自然灾害。\n二、响应措施\n1. 启动应急响应\n2. 组织救援队伍\n3. 设置临时安置点',
+                status: 'submitted',
+                submittedBy: 2,
+                submittedAt: now,
+                rejectReason: null,
+                createdAt: now,
+                updatedAt: now,
+              }
+              mockDisposalPlans.push(plan)
+            }
+          }
           if (!plan) { res.end(JSON.stringify(error('处置方案不存在'))); return }
           if (plan.status !== 'submitted') { res.end(JSON.stringify(error('仅已提交的方案可以驳回'))); return }
           const now = new Date().toISOString()
           plan.status = 'rejected'
           plan.rejectReason = body.rejectReason || null
           plan.updatedAt = now
+          const incident = mockIncidents.find((i: any) => i.incidentId === plan.incidentId)
+          if (incident) {
+            incident.disposalPlanStatus = 'rejected'
+            incident.resourceDispatchStatus = 'shortage'
+            incident.updatedAt = now
+          }
           res.end(JSON.stringify(success(plan))); return
+        }
+
+        if (url === '/api/resource-request/submit' && req.method === 'POST') {
+          const body = await parseBody(req)
+          if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
+            res.end(JSON.stringify(error('参数校验失败：items不能为空'))); return
+          }
+          const incident = mockIncidents.find((i: any) => i.incidentId === body.incidentId)
+          if (!incident) { res.end(JSON.stringify(error('关联灾情不存在'))); return }
+          if ((incident as any).disposalPlanStatus !== 'submitted') {
+            res.end(JSON.stringify(error('仅已提交处置方案的灾情可请求资源'))); return
+          }
+          const resourceIds = body.items.map((item: any) => item.resourceId)
+          if (new Set(resourceIds).size !== resourceIds.length) {
+            res.end(JSON.stringify(error('不允许重复选择同一种资源'))); return
+          }
+          const now = new Date().toISOString()
+          const createdRequests: any[] = []
+          for (const item of body.items) {
+            if (!item.resourceId || !item.quantity || item.quantity <= 0) continue
+            const req2 = {
+              id: mockResourceRequests.length + 1,
+              requestId: `rr-${String(mockResourceRequests.length + 1).padStart(4, '0')}`,
+              incidentId: body.incidentId,
+              incidentName: (incident as any).incidentName || null,
+              resourceId: item.resourceId,
+              resourceName: item.resourceName,
+              quantity: item.quantity,
+              status: 'pending',
+              requestedBy: 3,
+              requestedAt: now,
+              handledBy: null,
+              handledAt: null,
+              handleResult: null,
+              createdAt: now,
+              updatedAt: now,
+            }
+            mockResourceRequests.push(req2)
+            createdRequests.push(req2)
+          }
+          ;(incident as any).resourceDispatchStatus = 'executing'
+          ;(incident as any).updatedAt = now
+          res.end(JSON.stringify(success(createdRequests))); return
         }
 
         if (url === '/api/resource-shortage/list') {

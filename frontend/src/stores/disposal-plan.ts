@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { DisposalPlan } from '@/types/disposal-plan'
-import { getDisposalPlanList, submitDisposalPlan, rejectDisposalPlan } from '@/api/disposal-plan'
+import { getDisposalPlanList, submitDisposalPlan, rejectDisposalPlan, saveDisposalPlan } from '@/api/disposal-plan'
 
 export const useDisposalPlanStore = defineStore('disposal-plan', () => {
   const disposalPlanList = ref<DisposalPlan[]>([])
@@ -18,12 +18,16 @@ export const useDisposalPlanStore = defineStore('disposal-plan', () => {
     }
   }
 
-  async function submitDisposalPlanAction(id: number): Promise<void> {
-    await submitDisposalPlan({ id })
+  async function submitDisposalPlanAction(id: number, planContent?: string, incidentId?: string): Promise<void> {
+    await submitDisposalPlan({ id, planContent, incidentId })
   }
 
-  async function rejectDisposalPlanAction(id: number, reason: string): Promise<void> {
-    await rejectDisposalPlan({ id, rejectReason: reason })
+  async function saveDisposalPlanAction(id: number, planContent: string, incidentId?: string): Promise<void> {
+    await saveDisposalPlan({ id, planContent, incidentId })
+  }
+
+  async function rejectDisposalPlanAction(id: number, reason: string, incidentId?: string): Promise<void> {
+    await rejectDisposalPlan({ id, rejectReason: reason, incidentId })
   }
 
   return {
@@ -32,6 +36,7 @@ export const useDisposalPlanStore = defineStore('disposal-plan', () => {
     loading,
     fetchList,
     submitDisposalPlan: submitDisposalPlanAction,
+    saveDisposalPlan: saveDisposalPlanAction,
     rejectDisposalPlan: rejectDisposalPlanAction,
   }
 })

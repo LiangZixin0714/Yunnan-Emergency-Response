@@ -25,9 +25,7 @@ watch(() => route.path, () => {
     <div class="main-layout__right" :class="{ 'main-layout__right--collapsed': sidebarCollapsed }">
       <AppHeader @toggle-sidebar="toggleSidebar" />
       <main ref="contentRef" class="main-layout__content">
-        <RouterView v-slot="{ Component }">
-          <component :is="Component" :key="route.path" />
-        </RouterView>
+        <RouterView />
       </main>
     </div>
   </div>

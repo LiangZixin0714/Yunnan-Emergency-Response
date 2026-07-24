@@ -53,20 +53,33 @@ let searchItemIdCounter = 1
 
 const canCreateDisposalPlan = computed(() => {
   const role = authStore.roleName
-  const status = incidentStore.currentIncident?.status
-  return role === 'OPERATOR' && status === 'processing'
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return role === 'OPERATOR' && !dpStatus
+})
+
+const canRecreateDisposalPlan = computed(() => {
+  const role = authStore.roleName
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return role === 'OPERATOR' && dpStatus === 'rejected'
 })
 
 const canDispatchResource = computed(() => {
   const role = authStore.roleName
+  const status = incidentStore.currentIncident?.status
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return role === 'RESOURCE_MANAGER' && (dpStatus === 'submitted' || dpStatus === 'accepted')
+  return role === 'RESOURCE_MANAGER' && status !== 'completed' && dpStatus === 'submitted'
 })
 
 const canRejectPlan = computed(() => {
   const role = authStore.roleName
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
   return role === 'RESOURCE_MANAGER' && dpStatus === 'submitted'
+})
+
+const canShowRejectedTip = computed(() => {
+  const role = authStore.roleName
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return role === 'RESOURCE_MANAGER' && dpStatus === 'rejected'
 })
 
 const imageList = computed<string[]>(() => {
@@ -124,14 +137,29 @@ async function handleRejectPlan(): Promise<void> {
       inputPattern: /.+/,
       inputErrorMessage: '驳回原因不能为空',
     })
-    if (disposalPlanStore.currentDisposalPlan) {
-      await disposalPlanStore.rejectDisposalPlan(disposalPlanStore.currentDisposalPlan.id, value)
+    let planId = disposalPlanStore.currentDisposalPlan?.id
+    if (!planId && disposalPlanStore.disposalPlanList.length > 0) {
+      planId = disposalPlanStore.disposalPlanList[0].id
+      disposalPlanStore.currentDisposalPlan = disposalPlanStore.disposalPlanList[0]
+    }
+    if (planId) {
+      await disposalPlanStore.rejectDisposalPlan(planId, value, incidentId)
       ElMessage.success('方案已驳回')
-      incidentStore.fetchDetail(incidentId)
+      await incidentStore.fetchDetail(incidentId)
+      await disposalPlanStore.fetchList(incidentId)
+      if (disposalPlanStore.disposalPlanList.length > 0) {
+        disposalPlanStore.currentDisposalPlan = disposalPlanStore.disposalPlanList[0]
+      }
+    } else {
+      ElMessage.error('未找到关联的处置方案')
     }
   } catch {
     return
   }
+}
+
+function handleRequestResource(): void {
+  router.push(`/resource-request/${incidentId}`)
 }
 
 async function handleDispatchResource(): Promise<void> {
@@ -151,9 +179,14 @@ async function handleDispatchResource(): Promise<void> {
   dispatchQuantity.value = 0
 }
 
-onMounted(() => {
-  incidentStore.fetchDetail(incidentId)
-  disposalPlanStore.fetchList(incidentId)
+onMounted(async () => {
+  await incidentStore.fetchDetail(incidentId)
+  await disposalPlanStore.fetchList(incidentId)
+  if (disposalPlanStore.disposalPlanList.length > 0) {
+    disposalPlanStore.currentDisposalPlan = disposalPlanStore.disposalPlanList[0]
+  } else {
+    disposalPlanStore.currentDisposalPlan = null
+  }
   resourceStore.fetchList()
 })
 </script>
@@ -230,7 +263,7 @@ onMounted(() => {
           <p v-else>暂无方案内容</p>
           <div v-if="incidentStore.currentIncident.disposalPlanStatus === 'rejected'" class="incident-detail__reject-info">
             <p>驳回原因：{{ disposalPlanStore.currentDisposalPlan?.rejectReason ?? '未填写' }}</p>
-            <el-button v-if="canCreateDisposalPlan" type="primary" size="small" @click="router.push(`/plan?incidentId=${incidentId}`)">重新拟定</el-button>
+            <el-button v-if="canRecreateDisposalPlan" type="primary" size="small" @click="router.push(`/plan?incidentId=${incidentId}`)">重新拟定</el-button>
           </div>
         </el-card>
 
@@ -293,6 +326,7 @@ onMounted(() => {
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="handleDispatchResource">提交调度</el-button>
+              <el-button type="primary" plain @click="handleRequestResource">请求资源</el-button>
             </el-form-item>
           </el-form>
         </el-card>
@@ -301,9 +335,21 @@ onMounted(() => {
           <el-button type="danger" @click="handleRejectPlan">驳回方案</el-button>
         </div>
 
-        <div class="incident-detail__images" v-if="imageList.length">
+        <el-alert
+          v-if="canShowRejectedTip"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="incident-detail__rejected-tip"
+        >
+          <template #title>
+            已驳回方案，等待再次提交
+          </template>
+        </el-alert>
+
+        <div class="incident-detail__images" v-if="authStore.roleName === 'RESOURCE_MANAGER' || authStore.roleName === 'OPERATOR' || imageList.length">
           <h3>现场图片</h3>
-          <div class="incident-detail__image-list">
+          <div v-if="imageList.length" class="incident-detail__image-list">
             <el-image
               v-for="(url, index) in imageList"
               :key="index"
@@ -321,6 +367,7 @@ onMounted(() => {
               </template>
             </el-image>
           </div>
+          <p v-else class="incident-detail__no-images">未上传图片</p>
         </div>
       </template>
     </el-card>
@@ -412,5 +459,15 @@ onMounted(() => {
 
 .incident-detail__dispatch {
   margin-top: var(--spacing-md);
+}
+
+.incident-detail__rejected-tip {
+  margin-top: var(--spacing-md);
+}
+
+.incident-detail__no-images {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  padding: var(--spacing-md) 0;
 }
 </style>

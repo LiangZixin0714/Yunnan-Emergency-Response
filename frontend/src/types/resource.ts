@@ -93,3 +93,27 @@ export interface ResourceShortageWarning {
   handledAt: string | null
   handleResult: string | null
 }
+
+export interface ResourceRequest {
+  id: number
+  requestId: string
+  incidentId: string
+  incidentName: string | null
+  resourceId: string
+  resourceName: string
+  quantity: number
+  status: string
+  requestedBy: number | null
+  requestedAt: string | null
+  handledBy: number | null
+  handledAt: string | null
+  handleResult: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ResourceRequestItem {
+  resourceId: string
+  resourceName: string
+  quantity: number
+}
