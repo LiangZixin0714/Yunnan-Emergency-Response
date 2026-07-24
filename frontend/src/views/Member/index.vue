@@ -3,8 +3,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useMemberStore } from '@/stores/member'
 import { useRoleApplicationStore } from '@/stores/role-application'
 import { UserRoleLabel } from '@/types/enums'
-import type { UserRoleValue, ApplicationStatusValue } from '@/types/enums'
-import { ApplicationStatusLabel, ApplicationStatusTagType } from '@/types/enums'
+import type { UserRoleValue } from '@/types/enums'
 import StatusTag from '@/components/StatusTag.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -23,12 +22,12 @@ const filters = reactive({
 
 const roleOptions = Object.entries(UserRoleLabel).map(([value, label]) => ({ value, label }))
 
-const applicationStatusMap = Object.fromEntries(
-  Object.entries(ApplicationStatusLabel).map(([key, label]) => [
-    key,
-    { label, type: ApplicationStatusTagType[key as ApplicationStatusValue] },
-  ])
-)
+const applicationStatusMap: Record<string, { label: string; type: string }> = {
+  pending: { label: '待审核', type: 'warning' },
+  approved: { label: '已通过', type: 'success' },
+  received: { label: '已通过', type: 'success' },
+  rejected: { label: '已驳回', type: 'danger' },
+}
 
 async function loadMembers(): Promise<void> {
   await memberStore.fetchList({
@@ -150,7 +149,11 @@ onMounted(() => {
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="registeredAt" label="注册时间" width="180" />
+            <el-table-column prop="registeredAt" label="注册时间" width="180">
+              <template #default="{ row }">
+                {{ row.registeredAt?.replace('T', ' ') }}
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openRoleDialog(row)">角色变动</el-button>
@@ -170,7 +173,11 @@ onMounted(() => {
               </template>
             </el-table-column>
             <el-table-column prop="reason" label="申请理由" min-width="200" />
-            <el-table-column prop="createdAt" label="申请时间" width="180" />
+            <el-table-column prop="createdAt" label="申请时间" width="180">
+              <template #default="{ row }">
+                {{ row.createdAt?.replace('T', ' ') }}
+              </template>
+            </el-table-column>
             <el-table-column prop="status" label="审核状态" width="120">
               <template #default="{ row }">
                 <StatusTag :status="row.status" :status-map="applicationStatusMap" />
