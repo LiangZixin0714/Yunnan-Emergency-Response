@@ -7,5 +7,5 @@ export function getResourceList(params?: ResourceListParams): Promise<ApiRespons
 }
 
 export function getDispatchOrders(): Promise<ApiResponse<DispatchOrder[]>> {
-  return request.get('/dispatch/list')
+  return request.get('/resource/dispatch-records')
 }

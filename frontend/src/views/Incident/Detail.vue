@@ -113,13 +113,13 @@ function removeSearchItem(id: number): void {
 function handleIncreaseConfirm(resourceId: string, quantity: number): void {
   const res = resourceStore.resourceList.find((r) => r.resourceId === resourceId)
   if (!res) return
-  const currentDispatched = res.dispatchedCount ?? 0
-  if (currentDispatched + quantity > res.quantity) {
+  const currentDispatched = res.lockedStock ?? 0
+  if (currentDispatched + quantity > res.totalStock) {
     ElMessage.warning('请去总仓库增添资源')
     return
   }
-  res.dispatchedCount = currentDispatched + quantity
-  ElMessage.success(`已增加 ${res.name} 调度数${quantity}，当前已调度：${res.dispatchedCount}`)
+  res.lockedStock = currentDispatched + quantity
+  ElMessage.success(`已增加 ${res.resourceName} 调度数${quantity}，当前已调度：${res.lockedStock}`)
 }
 
 async function handleRejectShortage(): Promise<void> {
@@ -195,8 +195,8 @@ async function handleDispatchResource(): Promise<void> {
   }
   const res = resourceStore.resourceList.find((r) => r.resourceId === selectedResourceId.value)
   if (!res) return
-  const currentDispatched = res.dispatchedCount ?? 0
-  if (currentDispatched + dispatchQuantity.value > res.quantity) {
+  const currentDispatched = res.lockedStock ?? 0
+  if (currentDispatched + dispatchQuantity.value > res.totalStock) {
     ElMessage.warning('该资源不足')
     return
   }
@@ -362,7 +362,7 @@ onMounted(async () => {
                 <el-option
                   v-for="res in resourceStore.resourceList"
                   :key="res.resourceId"
-                  :label="`${res.name}（总数${res.quantity}，已调度${res.dispatchedCount ?? 0}，可分配${res.quantity - (res.dispatchedCount ?? 0)}）`"
+                  :label="`${res.resourceName}（总数${res.totalStock}，已调度${res.lockedStock ?? 0}，可分配${res.totalStock - (res.lockedStock ?? 0)}）`"
                   :value="res.resourceId"
                 />
               </el-select>

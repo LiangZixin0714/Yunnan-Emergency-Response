@@ -17,7 +17,7 @@ spring:
     postgres:
       jdbc-url: jdbc:postgresql://127.0.0.1:5432/emergency_vector
       username: postgres
-      password: ZAQ12wsx581!
+      password: postgres
       driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -69,3 +69,9 @@ minio:
   secret-key: ZAQ12wsx581!
   bucket: emergency-images
   secure: false
+
+ai-service:
+  url: http://localhost:8002
+  api-key: emergency-platform-ai-service-key-2024
+  connect-timeout: 5000
+  read-timeout: 600000

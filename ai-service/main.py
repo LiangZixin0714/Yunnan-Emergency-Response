@@ -15,6 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from utils.logger import setup_logger
 from agents.orchestrator import run_workflow
+from middleware.api_key_auth import ApiKeyAuthMiddleware
+from routers.vectorize_router import router as vectorize_router
 
 logger = setup_logger()
 
@@ -28,6 +30,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# API Key认证中间件
+app.add_middleware(ApiKeyAuthMiddleware)
+
+# 注册向量化路由
+app.include_router(vectorize_router)
 
 # 全局变量
 _workflow_ready = False

@@ -3,13 +3,15 @@ import type { ResourceTypeValue, ResourceStatusValue } from './enums'
 export interface Resource {
   id: number
   resourceId: string
-  name: string
+  resourceName: string
   resourceType: ResourceTypeValue
-  quantity: number
+  totalStock: number
+  availableStock: number
+  lockedStock: number
   unit: string | null
-  dispatchedCount: number
   status: ResourceStatusValue
-  storageAddress: string | null
+  location: string | null
+  description: string | null
   createdAt: string
   updatedAt: string
 }

@@ -43,25 +43,25 @@ async function loadAll(): Promise<void> {
   ])
 }
 
-async function handleIncrease(row: { id: number; name: string; quantity: number; dispatchedCount: number }): Promise<void> {
-  const newQuantity = row.quantity + 1
+async function handleIncrease(row: { id: number; resourceName: string; totalStock: number; lockedStock: number }): Promise<void> {
+  const newQuantity = row.totalStock + 1
   const res = resourceStore.resourceList.find((r) => r.id === row.id)
   if (res) {
-    res.quantity = newQuantity
-    ElMessage.success(`已增加 ${row.name} 数量，当前总数：${newQuantity}`)
+    res.totalStock = newQuantity
+    ElMessage.success(`已增加 ${row.resourceName} 数量，当前总数：${newQuantity}`)
   }
 }
 
-async function handleDecrease(row: { id: number; name: string; quantity: number; dispatchedCount: number }): Promise<void> {
-  if (row.quantity <= (row.dispatchedCount || 0)) {
+async function handleDecrease(row: { id: number; resourceName: string; totalStock: number; lockedStock: number }): Promise<void> {
+  if (row.totalStock <= (row.lockedStock || 0)) {
     ElMessage.warning('数量不能小于已调度数')
     return
   }
-  const newQuantity = row.quantity - 1
+  const newQuantity = row.totalStock - 1
   const res = resourceStore.resourceList.find((r) => r.id === row.id)
   if (res) {
-    res.quantity = newQuantity
-    ElMessage.success(`已减少 ${row.name} 数量，当前总数：${newQuantity}`)
+    res.totalStock = newQuantity
+    ElMessage.success(`已减少 ${row.resourceName} 数量，当前总数：${newQuantity}`)
   }
 }
 
@@ -113,20 +113,20 @@ onMounted(() => {
             </el-form-item>
           </el-form>
           <el-table :data="resourceStore.resourceList" v-loading="resourceStore.loading" stripe>
-            <el-table-column prop="name" label="资源名称" min-width="140" />
+            <el-table-column prop="resourceName" label="资源名称" min-width="140" />
             <el-table-column prop="resourceType" label="资源类型" width="120">
               <template #default="{ row }">
                 {{ ResourceTypeLabel[row.resourceType as ResourceTypeValue] ?? row.resourceType }}
               </template>
             </el-table-column>
-            <el-table-column prop="quantity" label="数量" width="100" />
+            <el-table-column prop="totalStock" label="数量" width="100" />
             <el-table-column prop="unit" label="单位" width="80" />
-            <el-table-column prop="dispatchedCount" label="已调度数" width="100">
+            <el-table-column prop="lockedStock" label="已调度数" width="100">
               <template #default="{ row }">
-                {{ row.dispatchedCount ?? 0 }}
+                {{ row.lockedStock ?? 0 }}
               </template>
             </el-table-column>
-            <el-table-column prop="storageAddress" label="存放地址" min-width="160" />
+            <el-table-column prop="location" label="存放地址" min-width="160" />
             <el-table-column v-if="authStore.roleName === 'ADMIN'" label="操作" width="140" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="handleIncrease(row)">增加</el-button>

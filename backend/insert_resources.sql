@@ -1,0 +1,22 @@
+USE emergency_db;
+INSERT INTO emergency_resource (resource_id, resource_name, resource_type, total_stock, available_stock, locked_stock, unit, status, location, description, created_at, updated_at) VALUES
+('RES-0001', 'Earthquake Rescue Team A', 'team', 50, 45, 5, 'person', 'available', 'Kunming', 'Professional earthquake rescue team', NOW(), NOW()),
+('RES-0002', 'Mountain Rescue Team B', 'team', 30, 28, 2, 'person', 'available', 'Dali', 'Mountain rescue team', NOW(), NOW()),
+('RES-0003', 'Water Rescue Team C', 'team', 40, 35, 5, 'person', 'available', 'Lijiang', 'Water search and rescue team', NOW(), NOW()),
+('RES-0004', 'Medical Team D', 'team', 25, 25, 0, 'person', 'available', 'Qujing', 'Emergency medical team', NOW(), NOW()),
+('RES-0005', 'First Aid Kit', 'medical', 200, 180, 20, 'box', 'available', 'Kunming', 'Hemostatic and disinfection supplies', NOW(), NOW()),
+('RES-0006', 'Surgical Kit', 'medical', 50, 45, 5, 'set', 'available', 'Kunming', 'Field surgery equipment', NOW(), NOW()),
+('RES-0007', 'Disinfection Kit', 'medical', 300, 280, 20, 'box', 'available', 'Yuxi', 'Environmental disinfection supplies', NOW(), NOW()),
+('RES-0008', 'Ambulance Type A', 'vehicle', 10, 8, 2, 'vehicle', 'available', 'Kunming', 'ICU ambulance', NOW(), NOW()),
+('RES-0009', 'Fire Engine Type B', 'vehicle', 15, 12, 3, 'vehicle', 'available', 'Qujing', 'Large fire engine', NOW(), NOW()),
+('RES-0010', 'Engineering Vehicle C', 'vehicle', 8, 7, 1, 'vehicle', 'available', 'Dali', 'Road repair vehicle', NOW(), NOW()),
+('RES-0011', 'Transport Truck D', 'vehicle', 20, 18, 2, 'vehicle', 'available', 'Honghe', 'Material transport truck', NOW(), NOW()),
+('RES-0012', 'Relief Tent Type A', 'shelter', 500, 450, 50, 'unit', 'available', 'Kunming', '10-person temporary shelter', NOW(), NOW()),
+('RES-0013', 'Temporary Housing B', 'shelter', 30, 28, 2, 'room', 'available', 'Qujing', 'Prefabricated housing', NOW(), NOW()),
+('RES-0014', 'Shelter Type C', 'shelter', 15, 14, 1, 'site', 'available', 'Lijiang', 'Large shelter facility', NOW(), NOW()),
+('RES-0015', 'Generator Set', 'equipment', 20, 18, 2, 'unit', 'available', 'Kunming', 'Emergency power supply', NOW(), NOW()),
+('RES-0016', 'Communication Vehicle', 'vehicle', 5, 4, 1, 'vehicle', 'available', 'Kunming', 'Satellite comm vehicle', NOW(), NOW()),
+('RES-0017', 'Search Drone', 'equipment', 10, 9, 1, 'unit', 'available', 'Dali', 'Aerial search drone', NOW(), NOW()),
+('RES-0018', 'Water Purifier', 'equipment', 15, 13, 2, 'unit', 'available', 'Honghe', 'Emergency water purifier', NOW(), NOW()),
+('RES-0019', 'Protective Suit', 'medical', 500, 480, 20, 'set', 'available', 'Kunming', 'Epidemic protective gear', NOW(), NOW()),
+('RES-0020', 'Emergency Food Pack', 'material', 1000, 950, 50, 'pack', 'available', 'Qujing', '3-day emergency food', NOW(), NOW());
