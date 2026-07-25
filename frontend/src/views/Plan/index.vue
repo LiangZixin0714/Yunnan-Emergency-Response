@@ -6,7 +6,7 @@ import { useIncidentStore } from '@/stores/incident'
 import { useDisposalPlanStore } from '@/stores/disposal-plan'
 import { PlanStatusLabel, PlanStatusTagType, DisposalPlanStatusLabel, DisposalPlanStatusTagType } from '@/types/enums'
 import type { PlanStatusValue, DisposalPlanStatusValue } from '@/types/enums'
-import { ElMessage, ElLoading } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { formatDate } from '@/utils/format'
 import StatusTag from '@/components/StatusTag.vue'
 import Vditor from 'vditor'
@@ -20,7 +20,6 @@ const disposalPlanStore = useDisposalPlanStore()
 
 const selectedIncidentId = ref('')
 const selectedPlanId = ref('')
-const streamMode = ref(false)
 const editableContent = ref('')
 const editorRef = ref<HTMLDivElement | null>(null)
 let vditorInstance: Vditor | null = null
@@ -76,41 +75,27 @@ async function handleGenerate(): Promise<void> {
     ElMessage.warning('请先选择灾情事件')
     return
   }
-  streamMode.value = true
   editableContent.value = ''
   if (vditorInstance) {
     vditorInstance.setValue('')
   }
   planStore.startStream(selectedIncidentId.value)
-  const stopWatch = watch(() => planStore.streaming, (newVal, oldVal) => {
-    if (oldVal === true && newVal === false) {
-      streamMode.value = false
-      if (planStore.streamingContent) {
-        editableContent.value = planStore.streamingContent
-        updateEditorContent(planStore.streamingContent)
-        ElMessage.success('方案已生成完毕')
-      } else {
-        ElMessage.error('连接已断开，已保存已接收的内容')
-      }
-      stopWatch()
-    }
-  })
 }
 
 function handleStopStream(): void {
   planStore.stopStream()
-  streamMode.value = false
   if (selectedIncidentId.value) {
     planStore.fetchList(selectedIncidentId.value)
   }
 }
 
 async function selectPlan(planId: string): Promise<void> {
-  streamMode.value = false
   selectedPlanId.value = planId
   await planStore.fetchDetail(planId)
   editableContent.value = planStore.currentPlan?.planContent || ''
-  updateEditorContent(editableContent.value)
+  if (vditorInstance) {
+    updateEditorContent(editableContent.value)
+  }
 }
 
 async function handleSaveDraft(): Promise<void> {
@@ -193,22 +178,61 @@ async function handleExportWord(planId: string): Promise<void> {
   }
 }
 
+async function handleDeletePlan(planId: string): Promise<void> {
+  try {
+    await ElMessageBox.confirm('确认删除该方案？删除后无法恢复。', '确认删除', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await planStore.removePlan(planId)
+    ElMessage.success('方案已删除')
+    editableContent.value = ''
+    if (vditorInstance) {
+      vditorInstance.setValue('')
+    }
+  } catch {
+    ElMessage.info('已取消删除')
+  }
+}
+
 watch(() => planStore.streamingContent, (val) => {
   if (planStore.streaming) {
     editableContent.value = val
-    updateEditorContent(val)
+  }
+})
+
+watch(() => planStore.streaming, (newVal, oldVal) => {
+  if (oldVal === true && newVal === false) {
+    if (planStore.streamingContent) {
+      editableContent.value = planStore.streamingContent
+      if (vditorInstance) {
+        updateEditorContent(planStore.streamingContent)
+      }
+      ElMessage.success('方案已生成完毕')
+    } else {
+      ElMessage.error('连接已断开，已保存已接收的内容')
+    }
+    if (selectedIncidentId.value) {
+      planStore.fetchList(selectedIncidentId.value)
+    }
   }
 })
 
 onMounted(() => {
   loadIncidents()
-  nextTick(() => {
-    initEditor()
-  })
   const incidentId = route.query.incidentId as string | undefined
   if (incidentId) {
     selectedIncidentId.value = incidentId
     loadPlans()
+  }
+})
+
+watch(selectedIncidentId, (newVal) => {
+  if (newVal && !vditorInstance) {
+    nextTick(() => {
+      initEditor()
+    })
   }
 })
 </script>
@@ -276,23 +300,31 @@ onMounted(() => {
             </el-tag>
           </div>
           <div class="plan-page__item-actions">
-            <el-button
-              size="small"
-              type="primary"
-              plain
-              @click.stop="handleExportPdf(plan.planId)"
-            >
-              PDF
-            </el-button>
-            <el-button
-              size="small"
-              type="success"
-              plain
-              @click.stop="handleExportWord(plan.planId)"
-            >
-              Word
-            </el-button>
-          </div>
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                @click.stop="handleExportPdf(plan.planId)"
+              >
+                PDF
+              </el-button>
+              <el-button
+                size="small"
+                type="success"
+                plain
+                @click.stop="handleExportWord(plan.planId)"
+              >
+                Word
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                @click.stop="handleDeletePlan(plan.planId)"
+              >
+                删除
+              </el-button>
+            </div>
         </div>
       </el-card>
 
@@ -310,8 +342,9 @@ onMounted(() => {
           </div>
         </template>
 
-        <div v-if="!planStore.currentPlan && !editableContent" class="plan-page__empty">请选择或生成方案</div>
-        <div v-else>
+        <div v-show="!planStore.currentPlan && !editableContent && !planStore.streaming" class="plan-page__empty">请选择或生成方案</div>
+        
+        <div v-show="planStore.currentPlan || editableContent || planStore.streaming">
           <template v-if="planStore.currentPlan">
             <h3>{{ planStore.currentPlan.planTitle }}</h3>
             <div class="plan-page__content-meta">
@@ -322,8 +355,14 @@ onMounted(() => {
             </div>
             <el-divider />
           </template>
-          <div ref="editorRef" class="plan-page__editor"></div>
-          <div class="plan-page__draft-submit-area" v-if="editableContent">
+
+          <div v-if="planStore.streaming" class="plan-page__streaming-content">
+            <div class="plan-page__streaming-content-inner">{{ planStore.streamingContent }}</div>
+          </div>
+
+          <div v-show="!planStore.streaming" ref="editorRef" class="plan-page__editor"></div>
+
+          <div class="plan-page__draft-submit-area" v-if="editableContent && !planStore.streaming">
             <el-button type="primary" plain @click="handleSaveDraft">保存草稿</el-button>
             <el-button type="primary" @click="handleSubmitDisposalPlan">确认提交</el-button>
           </div>
@@ -404,6 +443,22 @@ onMounted(() => {
 
 .plan-page__editor {
   min-height: 500px;
+}
+
+.plan-page__streaming-content {
+  min-height: 500px;
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-page);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-y: auto;
+}
+
+.plan-page__streaming-content-inner {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .plan-page__detail h3 {

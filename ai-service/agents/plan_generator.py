@@ -133,6 +133,35 @@ def generate_plan(info: Dict[str, Any], description: str, retrieved_plans: List[
         return _generate_default_plan(info, description, retrieved_plans, resources)
 
 
+def generate_plan_stream(info: Dict[str, Any], description: str, retrieved_plans: List[Dict[str, Any]] = None, resources: List[Dict[str, Any]] = None):
+    """流式生成应急方案，返回生成器。"""
+    logger.info(f"📝 开始流式生成方案，灾害类型: {info.get('type')}, 等级: {info.get('level')}")
+    
+    try:
+        prompt = _build_prompt(info, description, retrieved_plans, resources)
+        
+        stream = _client.completions.create(
+            model="Qwen/Qwen2.5-7B-Instruct",
+            prompt=prompt,
+            max_tokens=1500,
+            temperature=0.7,
+            top_p=0.9,
+            stop=["<|im_end|>"],
+            stream=True
+        )
+        
+        for chunk in stream:
+            text = chunk.choices[0].text
+            if text:
+                yield text
+        
+        logger.info(f"✅ 流式方案生成完成")
+        
+    except Exception as e:
+        logger.error(f"❌ 流式方案生成失败: {e}")
+        yield _generate_default_plan(info, description, retrieved_plans, resources)
+
+
 def _generate_default_plan(info: Dict[str, Any], description: str, retrieved_plans: List[Dict[str, Any]] = None, resources: List[Dict[str, Any]] = None) -> str:
     """生成默认方案（当vLLM调用失败时使用）。"""
     disaster_type = info.get('type', '未知灾害')

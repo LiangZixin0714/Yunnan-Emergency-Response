@@ -30,7 +30,7 @@ public class PlanService {
     private static final Logger logger = LoggerFactory.getLogger(PlanService.class);
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
 
-    private static final String AI_SERVICE_BASE_URL = "http://127.0.0.1:8001";
+    private static final String AI_SERVICE_BASE_URL = "http://127.0.0.1:8002";
     private static final String AI_SYNC_API = "/api/v1/generate-plan";
     private static final String AI_STREAM_API = "/api/v1/generate-plan/stream";
     private static final int SSE_SLEEP_MS = 50;
@@ -86,6 +86,14 @@ public class PlanService {
 
     public List<Plan> getPlansByIncidentId(String incidentId) {
         return planRepository.findByIncidentId(incidentId);
+    }
+
+    @Transactional("mysqlTransactionManager")
+    public void deletePlan(String planId) {
+        Plan plan = planRepository.findByPlanId(planId)
+                .orElseThrow(() -> new IllegalArgumentException("方案不存在"));
+        planRepository.delete(plan);
+        logger.info("方案已删除，planId: {}", planId);
     }
 
     @Transactional("mysqlTransactionManager")
@@ -147,17 +155,31 @@ public class PlanService {
                 .subscribe(
                         data -> {
                             try {
-                                JsonNode node = objectMapper.readTree(data);
+                                String trimmedData = data.trim();
+                                if (trimmedData.isEmpty()) {
+                                    return;
+                                }
+                                
+                                if (trimmedData.startsWith("data: ")) {
+                                    trimmedData = trimmedData.substring(6);
+                                } else if (trimmedData.startsWith("data:")) {
+                                    trimmedData = trimmedData.substring(5);
+                                }
+                                
+                                JsonNode node = objectMapper.readTree(trimmedData);
                                 JsonNode errorNode = node.get("error");
                                 JsonNode chunkNode = node.get("chunk");
+                                JsonNode doneNode = node.get("done");
 
                                 if (errorNode != null) {
                                     logger.error("AI服务返回错误: {}", errorNode.asText());
+                                    emitter.send(SseEmitter.event().data("生成方案时发生错误: " + errorNode.asText()));
+                                } else if (doneNode != null && doneNode.asBoolean()) {
+                                    logger.info("SSE流式传输完成信号收到");
                                 } else if (chunkNode != null) {
                                     String chunk = chunkNode.asText();
-                                    planContentBuilder.append(chunk).append("\n");
-                                    emitter.send(SseEmitter.event()
-                                            .data(chunk));
+                                    planContentBuilder.append(chunk);
+                                    emitter.send(SseEmitter.event().data(chunk));
                                 }
                             } catch (Exception e) {
                                 logger.error("解析SSE数据失败: {}", data, e);

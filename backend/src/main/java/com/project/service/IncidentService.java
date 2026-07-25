@@ -52,6 +52,17 @@ public class IncidentService {
 
     @Transactional("mysqlTransactionManager")
     public IncidentReportResponse reportIncident(IncidentReportRequest request, Long reporterId) {
+        logger.info("=== 接收到灾情上报请求 ===");
+        logger.info("incidentName: {}", request.getIncidentName());
+        logger.info("disasterType: {}", request.getDisasterType());
+        logger.info("images: {}", request.getImages() != null ? request.getImages().length : 0);
+        if (request.getImages() != null) {
+            for (int i = 0; i < request.getImages().length; i++) {
+                MultipartFile file = request.getImages()[i];
+                logger.info("  image[{}]: name={}, size={}", i, file.getOriginalFilename(), file.getSize());
+            }
+        }
+        
         Incident incident = new Incident();
         incident.setIncidentId(UUID.randomUUID().toString());
         incident.setIncidentName(request.getIncidentName());

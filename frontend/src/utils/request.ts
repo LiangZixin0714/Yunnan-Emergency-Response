@@ -26,8 +26,11 @@ request.interceptors.request.use(
 )
 
 request.interceptors.response.use(
-  (response: AxiosResponse<ApiResponse<unknown>>) => {
-    const res = response.data
+  (response: AxiosResponse<ApiResponse<unknown> | Blob>) => {
+    if (response.data instanceof Blob) {
+      return response.data
+    }
+    const res = response.data as ApiResponse<unknown>
     if (res.code === 0) {
       return res.data as any
     }
