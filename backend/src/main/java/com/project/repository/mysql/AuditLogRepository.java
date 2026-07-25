@@ -14,4 +14,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     List<AuditLog> findByAction(String action);
 
     List<AuditLog> findByTargetType(String targetType);
+
+    List<AuditLog> findByModule(String module);
+
+    List<AuditLog> findByModuleAndAction(String module, String action);
 }

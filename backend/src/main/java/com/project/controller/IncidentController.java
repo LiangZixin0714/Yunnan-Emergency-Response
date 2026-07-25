@@ -5,6 +5,8 @@ import com.project.dto.incident.IncidentReportRequest;
 import com.project.dto.incident.IncidentReportResponse;
 import com.project.dto.incident.IncidentRequest;
 import com.project.dto.incident.IncidentResponse;
+import com.project.entity.mysql.User;
+import com.project.repository.mysql.UserRepository;
 import com.project.service.IncidentService;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
@@ -18,17 +20,25 @@ import org.springframework.web.multipart.MultipartFile;
 public class IncidentController {
 
     private final IncidentService incidentService;
+    private final UserRepository userRepository;
 
-    public IncidentController(IncidentService incidentService) {
+    public IncidentController(IncidentService incidentService, UserRepository userRepository) {
         this.incidentService = incidentService;
+        this.userRepository = userRepository;
+    }
+
+    private Long getUserId(Authentication authentication) {
+        String username = authentication.getName();
+        return userRepository.findByUsername(username)
+                .map(User::getId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在: " + username));
     }
 
     @PostMapping(value = "/report", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Result<IncidentReportResponse>> reportIncident(
             @Valid IncidentReportRequest request,
             Authentication authentication) {
-        String username = authentication.getName();
-        Long reporterId = 1L;
+        Long reporterId = getUserId(authentication);
         IncidentReportResponse response = incidentService.reportIncident(request, reporterId);
         return ResponseEntity.ok(Result.success("success", response));
     }
@@ -55,8 +65,7 @@ public class IncidentController {
     public ResponseEntity<Result<IncidentResponse>> submitIncident(
             @Valid @RequestBody IncidentRequest request,
             Authentication authentication) {
-        String username = authentication.getName();
-        Long reporterId = 1L;
+        Long reporterId = getUserId(authentication);
         IncidentResponse response = incidentService.submitIncident(request, reporterId);
         return ResponseEntity.ok(Result.success("success", response));
     }

@@ -1,9 +1,11 @@
 """LangGraph多Agent编排模块，串联情报分析、方案生成、方案审查三个Agent。"""
 
+import asyncio
 import logging
 import sys
 import os
 import time
+import uuid
 from typing import Dict, Any, TypedDict, List
 
 from langgraph.graph import StateGraph, END
@@ -14,6 +16,7 @@ from agents.info_extractor import extract_incident_info
 from agents.plan_generator import generate_plan, generate_plan_stream
 from agents.plan_reviewer import review_plan
 from agents.resource_dispatcher import dispatch_resources
+from agents.audit_client import submit_agent_run, build_citations
 from rag.retriever import retrieve_plans
 
 logger = setup_logger()
@@ -221,10 +224,13 @@ def build_workflow() -> StateGraph:
     return app
 
 
-def run_workflow(description: str) -> Dict[str, Any]:
+def run_workflow(description: str, incident_id: str = "") -> Dict[str, Any]:
     """运行完整工作流。"""
     logger.info(f"🚀 开始执行工作流，描述长度: {len(description)}")
     total_start_time = time.time()
+    run_id = str(uuid.uuid4())
+    workflow_start_iso = None
+    workflow_end_iso = None
     
     try:
         app = build_workflow()
@@ -245,11 +251,50 @@ def run_workflow(description: str) -> Dict[str, Any]:
         total_elapsed = time.time() - total_start_time
         result["messages"].append(f"工作流执行完成，总耗时={total_elapsed:.2f}秒")
         logger.info(f"✅ 工作流执行完成，总耗时: {total_elapsed:.2f}秒")
+
+        try:
+            from datetime import datetime
+            workflow_start_iso = datetime.fromtimestamp(total_start_time).isoformat()
+            workflow_end_iso = datetime.now().isoformat()
+            citations = build_citations(result.get("retrieved_plans", []), run_id)
+            asyncio.create_task(submit_agent_run(
+                run_id=run_id,
+                incident_id=incident_id,
+                agent_name="orchestrator",
+                input_params=description,
+                output_result=result.get("plan", ""),
+                status="success",
+                start_time=workflow_start_iso,
+                end_time=workflow_end_iso,
+                citations=citations,
+            ))
+        except Exception as audit_err:
+            logger.error(f"审计记录提交失败（不影响结果）: {audit_err}")
+
         return result
         
     except Exception as e:
         total_elapsed = time.time() - total_start_time
         logger.error(f"❌ 工作流执行失败: {e}, 耗时: {total_elapsed:.2f}秒")
+
+        try:
+            from datetime import datetime
+            workflow_start_iso = datetime.fromtimestamp(total_start_time).isoformat()
+            workflow_end_iso = datetime.now().isoformat()
+            asyncio.create_task(submit_agent_run(
+                run_id=run_id,
+                incident_id=incident_id,
+                agent_name="orchestrator",
+                input_params=description,
+                output_result="",
+                status="failed",
+                error_message=str(e),
+                start_time=workflow_start_iso,
+                end_time=workflow_end_iso,
+            ))
+        except Exception as audit_err:
+            logger.error(f"审计记录提交失败（不影响结果）: {audit_err}")
+
         return {
             "description": description,
             "info": {},
@@ -259,9 +304,12 @@ def run_workflow(description: str) -> Dict[str, Any]:
         }
 
 
-def run_workflow_stream(description: str):
+def run_workflow_stream(description: str, incident_id: str = ""):
     """运行流式工作流，返回生成器。"""
     logger.info(f"🚀 开始执行流式工作流，描述长度: {len(description)}")
+    run_id = str(uuid.uuid4())
+    stream_start_time = time.time()
+    retrieved_plans = []
     
     try:
         info = extract_incident_info(description)
@@ -276,13 +324,51 @@ def run_workflow_stream(description: str):
         resources = dispatch_resources(info)
         logger.info(f"✅ 资源调度完成，返回 {len(resources)} 条资源")
         
+        full_plan = ""
         for chunk in generate_plan_stream(info, description, retrieved_plans, resources):
+            full_plan += chunk if isinstance(chunk, str) else ""
             yield chunk
             
         logger.info(f"✅ 流式工作流执行完成")
+
+        try:
+            from datetime import datetime
+            stream_end_time = time.time()
+            citations = build_citations(retrieved_plans, run_id)
+            asyncio.create_task(submit_agent_run(
+                run_id=run_id,
+                incident_id=incident_id,
+                agent_name="orchestrator",
+                input_params=description,
+                output_result=full_plan[:5000],
+                status="success",
+                start_time=datetime.fromtimestamp(stream_start_time).isoformat(),
+                end_time=datetime.fromtimestamp(stream_end_time).isoformat(),
+                citations=citations,
+            ))
+        except Exception as audit_err:
+            logger.error(f"审计记录提交失败（不影响结果）: {audit_err}")
         
     except Exception as e:
         logger.error(f"❌ 流式工作流执行失败: {e}")
+
+        try:
+            from datetime import datetime
+            stream_end_time = time.time()
+            asyncio.create_task(submit_agent_run(
+                run_id=run_id,
+                incident_id=incident_id,
+                agent_name="orchestrator",
+                input_params=description,
+                output_result="",
+                status="failed",
+                error_message=str(e),
+                start_time=datetime.fromtimestamp(stream_start_time).isoformat(),
+                end_time=datetime.fromtimestamp(stream_end_time).isoformat(),
+            ))
+        except Exception as audit_err:
+            logger.error(f"审计记录提交失败（不影响结果）: {audit_err}")
+
         yield f"工作流执行失败: {e}"
 
 

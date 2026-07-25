@@ -6,6 +6,41 @@
   <component name="ChangeListManager">
     <list default="true" id="a9bab647-e43b-4196-af29-6498fbf56def" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ai-service/agents/info_extractor.py" beforeDir="false" afterPath="$PROJECT_DIR$/ai-service/agents/info_extractor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ai-service/agents/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/ai-service/agents/orchestrator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ai-service/agents/plan_generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/ai-service/agents/plan_generator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ai-service/agents/resource_dispatcher.py" beforeDir="false" afterPath="$PROJECT_DIR$/ai-service/agents/resource_dispatcher.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ai-service/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/ai-service/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ai-service/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/ai-service/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/annotation/SystemAuditLog.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/annotation/SystemAuditLog.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/aspect/AuditLogAspect.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/aspect/AuditLogAspect.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/config/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/controller/IncidentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/controller/IncidentController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/dto/incident/IncidentRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/dto/incident/IncidentRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/entity/mysql/Citation.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/entity/mysql/Citation.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/entity/mysql/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/entity/mysql/User.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/entity/postgres/Location.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/entity/postgres/Location.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/repository/mysql/AuditLogRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/repository/mysql/AuditLogRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/repository/mysql/CitationRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/repository/mysql/CitationRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/repository/mysql/UserRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/repository/mysql/UserRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/service/AiDecisionServiceMockImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/service/AiDecisionServiceMockImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/project/service/LocationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/project/service/LocationService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/resources/application.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/target/classes/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/backend/target/classes/application.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/target/emergency-platform-1.0.0.jar.original" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/target/maven-archiver/pom.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/backend/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/backend/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/API_DOCUMENTATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/API_DOCUMENTATION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/types/enums.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/types/enums.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/views/Agent/index.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/views/Agent/index.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/generate_mock_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/generate_mock_data.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/mock_incidents.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/mock_incidents.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/mock_users.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/mock_users.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/start_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/start_server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/结训文档/测试报告.md" beforeDir="false" afterPath="$PROJECT_DIR$/结训文档/测试报告.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/结训文档/系统设计说明书.md" beforeDir="false" afterPath="$PROJECT_DIR$/结训文档/系统设计说明书.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -15,29 +50,29 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 5
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 5
+}</component>
   <component name="ProjectId" id="3GqDEJzve7lT8pO9FBdXTb4FujR" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -60,5 +95,8 @@
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/ai_service$main.coverage" NAME="main 覆盖结果" MODIFIED="1784875155051" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ai-service" />
   </component>
 </project>
