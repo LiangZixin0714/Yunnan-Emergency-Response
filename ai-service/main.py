@@ -41,6 +41,11 @@ async def startup():
     logger.info("🚀 正在启动AI服务...")
     
     try:
+        from rag.retriever import check_database_status
+        
+        db_status = check_database_status()
+        logger.info(f"📊 向量数据库状态: 已连接={db_status.get('connected')}, 表存在={db_status.get('table_exists')}, 数据量={db_status.get('row_count')}")
+        
         _workflow_ready = True
         logger.info("✅ AI服务启动完成！")
         

@@ -17,3 +17,11 @@ export function saveDisposalPlan(data: { id: number; planContent: string; incide
 export function rejectDisposalPlan(data: { id: number; rejectReason: string; incidentId?: string }): Promise<ApiResponse<DisposalPlan>> {
   return request.post('/disposal-plan/reject', data)
 }
+
+export function exportPdf(planId: string): Promise<Blob> {
+  return request.get(`/disposal-plan/export/pdf?planId=${planId}`, { responseType: 'blob' })
+}
+
+export function exportWord(planId: string): Promise<Blob> {
+  return request.get(`/disposal-plan/export/word?planId=${planId}`, { responseType: 'blob' })
+}

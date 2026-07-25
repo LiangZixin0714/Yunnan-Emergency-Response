@@ -5,16 +5,18 @@ public class LoginResponse {
     private String token;
     private String tokenType;
     private Long expiresIn;
+    private Long userId;
     private String username;
     private String realName;
     private String roleName;
 
     public LoginResponse() {}
 
-    public LoginResponse(String token, String tokenType, Long expiresIn, String username, String realName, String roleName) {
+    public LoginResponse(String token, String tokenType, Long expiresIn, Long userId, String username, String realName, String roleName) {
         this.token = token;
         this.tokenType = tokenType;
         this.expiresIn = expiresIn;
+        this.userId = userId;
         this.username = username;
         this.realName = realName;
         this.roleName = roleName;
@@ -42,6 +44,14 @@ public class LoginResponse {
 
     public void setExpiresIn(Long expiresIn) {
         this.expiresIn = expiresIn;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public String getUsername() {

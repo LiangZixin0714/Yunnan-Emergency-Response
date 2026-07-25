@@ -42,7 +42,9 @@ export async function streamPlan(
       buffer = lines.pop() || ''
       for (const line of lines) {
         if (line.startsWith('data: ')) {
-          onChunk(line.slice(6))
+          onChunk(line.slice(6) + '\n')
+        } else if (line.startsWith('data:')) {
+          onChunk(line.slice(5) + '\n')
         }
       }
     }

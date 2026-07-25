@@ -64,7 +64,7 @@ async function handleSubmit(): Promise<void> {
 
   submitting.value = true
   try {
-    await incidentStore.report({
+    const reportResult = await incidentStore.report({
       incidentName: form.incidentName,
       disasterType: form.disasterType as DisasterTypeValue,
       incidentLevel: form.incidentLevel as IncidentLevelValue,
@@ -75,9 +75,13 @@ async function handleSubmit(): Promise<void> {
       propertyLoss: form.propertyLoss ?? undefined,
       reporterName: authStore.username || '',
       images: files.value,
-    })
+    }) as { incidentId?: string } | undefined
     ElMessage.success('灾情上报成功')
-    router.push('/incident/list')
+    if (reportResult?.incidentId) {
+      router.push(`/incident/${reportResult.incidentId}`)
+    } else {
+      router.push('/incident/list')
+    }
   } catch {
     ElMessage.error('提交失败，请稍后重试')
   } finally {

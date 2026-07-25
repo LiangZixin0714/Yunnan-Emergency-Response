@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,8 +17,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,22 +29,23 @@ public class PlanService {
 
     private static final Logger logger = LoggerFactory.getLogger(PlanService.class);
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
-    
-    private static final String AI_SERVICE_BASE_URL = "http://localhost:8002";
+
+    private static final String AI_SERVICE_BASE_URL = "http://127.0.0.1:8001";
     private static final String AI_SYNC_API = "/api/v1/generate-plan";
     private static final String AI_STREAM_API = "/api/v1/generate-plan/stream";
-    private static final int SSE_CHUNK_SIZE = 10;
     private static final int SSE_SLEEP_MS = 50;
 
     private final PlanRepository planRepository;
     private final IncidentRepository incidentRepository;
     private final RestClient restClient;
+    private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
     public PlanService(PlanRepository planRepository, IncidentRepository incidentRepository) {
         this.planRepository = planRepository;
         this.incidentRepository = incidentRepository;
         this.restClient = RestClient.create(AI_SERVICE_BASE_URL);
+        this.webClient = WebClient.builder().baseUrl(AI_SERVICE_BASE_URL).build();
         this.objectMapper = new ObjectMapper();
     }
 
@@ -121,60 +119,64 @@ public class PlanService {
     public SseEmitter streamPlan(String incidentId) {
         SseEmitter emitter = new SseEmitter(300000L);
 
-        executorService.execute(() -> {
-            Incident incident = incidentRepository.findByIncidentId(incidentId).orElse(null);
-            String description = buildDescription(incident);
-
+        Incident incident = incidentRepository.findByIncidentId(incidentId).orElse(null);
+        if (incident == null) {
             try {
-                logger.info("开始生成应急预案，incidentId: {}", incidentId);
-                logger.info("灾情描述: {}", description);
-
-                String planContent;
-                try {
-                    planContent = callSyncApi(incident);
-                    logger.info("AI服务返回方案长度: {}", planContent != null ? planContent.length() : 0);
-                } catch (Exception e) {
-                    logger.error("调用AI服务失败，使用Mock数据", e);
-                    planContent = generateMockPlanContent(incident);
-                }
-
-                if (planContent == null || planContent.isEmpty()) {
-                    logger.error("方案内容为空");
-                    emitter.send(SseEmitter.event()
-                            .name("error")
-                            .data("生成应急预案失败，请稍后重试"));
-                    emitter.complete();
-                    return;
-                }
-
-                char[] chars = planContent.toCharArray();
-                for (int i = 0; i < chars.length; i++) {
-                    try {
-                        emitter.send(SseEmitter.event()
-                                .name("message")
-                                .data(String.valueOf(chars[i])));
-                        Thread.sleep(SSE_SLEEP_MS);
-                    } catch (IOException e) {
-                        logger.error("发送SSE数据失败", e);
-                        break;
-                    }
-                }
-
+                emitter.send(SseEmitter.event().data(" 灾情不存在，无法生成方案", MediaType.TEXT_PLAIN));
                 emitter.complete();
-                logger.info("SSE stream completed for incident: {}", incidentId);
-
-            } catch (Exception e) {
-                logger.error("生成应急预案失败，incidentId: {}", incidentId, e);
-                try {
-                    emitter.send(SseEmitter.event()
-                            .name("error")
-                            .data("生成应急预案失败，请稍后重试"));
-                } catch (IOException ioEx) {
-                    logger.error("发送错误消息失败", ioEx);
-                }
-                emitter.complete();
+            } catch (IOException e) {
+                emitter.completeWithError(e);
             }
-        });
+            return emitter;
+        }
+
+        String description = buildDescription(incident);
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("description", description);
+
+        logger.info("开始流式生成应急预案，incidentId: {}, 描述: {}", incidentId, description);
+
+        StringBuilder planContentBuilder = new StringBuilder();
+
+        webClient.post()
+                .uri(AI_STREAM_API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToFlux(String.class)
+                .subscribe(
+                        data -> {
+                            try {
+                                JsonNode node = objectMapper.readTree(data);
+                                JsonNode errorNode = node.get("error");
+                                JsonNode chunkNode = node.get("chunk");
+
+                                if (errorNode != null) {
+                                    logger.error("AI服务返回错误: {}", errorNode.asText());
+                                } else if (chunkNode != null) {
+                                    String chunk = chunkNode.asText();
+                                    planContentBuilder.append(chunk).append("\n");
+                                    emitter.send(SseEmitter.event()
+                                            .data(chunk));
+                                }
+                            } catch (Exception e) {
+                                logger.error("解析SSE数据失败: {}", data, e);
+                            }
+                        },
+                        error -> {
+                            logger.error("流式API调用失败，回退到同步API", error);
+                            fallbackToSync(emitter, incident);
+                        },
+                        () -> {
+                            try {
+                                emitter.complete();
+                                logger.info("SSE流式传输完成，incidentId: {}", incidentId);
+                                savePlanToDatabase(incidentId, incident, planContentBuilder.toString());
+                            } catch (Exception e) {
+                                logger.error("完成SSE时出错", e);
+                            }
+                        }
+                );
 
         emitter.onCompletion(() -> logger.info("SSE emitter completed"));
         emitter.onTimeout(() -> logger.warn("SSE emitter timeout"));
@@ -183,24 +185,91 @@ public class PlanService {
         return emitter;
     }
 
+    private void savePlanToDatabase(String incidentId, Incident incident, String planContent) {
+        if (planContent == null || planContent.isEmpty()) {
+            logger.warn("方案内容为空，不保存到数据库");
+            return;
+        }
+        
+        try {
+            String planId = UUID.randomUUID().toString();
+            
+            Plan plan = new Plan();
+            plan.setPlanId(planId);
+            plan.setIncidentId(incidentId);
+            plan.setPlanTitle("应急预案 - " + incident.getIncidentName());
+            plan.setPlanContent(planContent);
+            plan.setStatus("draft");
+
+            planRepository.save(plan);
+            logger.info("方案已保存到数据库，planId: {}, incidentId: {}", planId, incidentId);
+        } catch (Exception e) {
+            logger.error("保存方案到数据库失败", e);
+        }
+    }
+
+    /**
+     * 同步API回退：流式接口失败时，调用同步接口获取完整方案，逐字推送模拟打字机效果
+     */
+    private void fallbackToSync(SseEmitter emitter, Incident incident) {
+        executorService.execute(() -> {
+            try {
+                String planContent = callSyncApi(incident);
+                if (planContent == null || planContent.isEmpty()) {
+                    planContent = generateMockPlanContent(incident);
+                }
+                for (char c : planContent.toCharArray()) {
+                    emitter.send(SseEmitter.event()
+                            .data(" " + c, MediaType.TEXT_PLAIN));
+                    Thread.sleep(SSE_SLEEP_MS);
+                }
+                emitter.complete();
+            } catch (Exception e) {
+                logger.error("同步API回退失败", e);
+                try {
+                    emitter.send(SseEmitter.event()
+                            .data(" 生成应急预案失败，请稍后重试", MediaType.TEXT_PLAIN));
+                } catch (IOException ioEx) {
+                    logger.error("发送错误消息失败", ioEx);
+                }
+                emitter.complete();
+            }
+        });
+    }
+
     private String callSyncApi(Incident incident) throws Exception {
         String description = buildDescription(incident);
         
         Map<String, String> requestBody = new HashMap<>();
         requestBody.put("description", description);
 
-        String response = restClient.post()
+        logger.info("调用AI同步API，请求体: {}", requestBody);
+        
+        String requestJson = objectMapper.writeValueAsString(requestBody);
+        logger.info("请求JSON: {}", requestJson);
+        
+        String response = webClient.post()
                 .uri(AI_SYNC_API)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(requestBody)
+                .bodyValue(requestBody)
                 .retrieve()
-                .body(String.class);
+                .bodyToMono(String.class)
+                .block();
 
+        logger.info("AI同步API响应: {}", response);
+        
+        if (response == null || response.isEmpty()) {
+            logger.warn("外部API返回为空");
+            return null;
+        }
+        
         JsonNode rootNode = objectMapper.readTree(response);
         JsonNode planNode = rootNode.get("plan");
         
         if (planNode != null && !planNode.isNull()) {
-            return planNode.asText();
+            String planContent = planNode.asText();
+            logger.info("解析到plan内容，长度: {}", planContent.length());
+            return planContent;
         }
         
         logger.warn("外部API返回结果中未找到plan字段");

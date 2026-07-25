@@ -65,13 +65,11 @@ def _retrieve_plans(state: AgentState) -> AgentState:
     start_time = time.time()
     
     try:
-        # 构建查询关键词（灾害类型 + 位置）
         info = state.get("info", {})
         disaster_type = info.get("type", "")
         location = info.get("location", "")
         query = f"{disaster_type} {location} 应急处置"
         
-        # 执行检索（限制返回数量以控制上下文长度）
         plans = retrieve_plans(query, limit=3)
         elapsed = time.time() - start_time
         state["retrieved_plans"] = plans

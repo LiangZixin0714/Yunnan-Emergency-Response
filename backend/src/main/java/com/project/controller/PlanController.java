@@ -11,7 +11,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -50,15 +49,7 @@ public class PlanController {
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamPlan(
             @RequestParam @NotBlank(message = "incidentId不能为空") String incidentId) {
-        SseEmitter emitter = planService.streamPlan(incidentId);
-        try {
-            emitter.send(SseEmitter.event()
-                    .name("connect")
-                    .data("connected"));
-        } catch (IOException e) {
-            emitter.completeWithError(e);
-        }
-        return emitter;
+        return planService.streamPlan(incidentId);
     }
 
     @PostMapping("/review")

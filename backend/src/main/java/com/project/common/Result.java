@@ -44,6 +44,14 @@ public class Result<T> {
         return error(400, message);
     }
 
+    public static <T> Result<T> badRequest(String message, T data) {
+        Result<T> result = new Result<>();
+        result.setCode(400);
+        result.setMessage(message);
+        result.setData(data);
+        return result;
+    }
+
     public static <T> Result<T> unauthorized(String message) {
         return error(401, message);
     }

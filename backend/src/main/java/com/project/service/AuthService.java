@@ -41,16 +41,17 @@ public class AuthService {
             throw new IllegalArgumentException("用户已被禁用");
         }
 
-        String token = jwtUtil.generateToken(user.getUsername());
-
         String roleName = roleRepository.findById(user.getRoleId())
                 .map(Role::getRoleName)
                 .orElse("VIEWER");
+
+        String token = jwtUtil.generateToken(user.getUsername(), roleName);
 
         return new LoginResponse(
                 token,
                 "Bearer",
                 86400000L,
+                user.getId(),
                 user.getUsername(),
                 user.getRealName(),
                 roleName

@@ -2,6 +2,7 @@ package com.project.dto.incident;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -17,12 +18,17 @@ public class IncidentReportRequest {
 
     private String incidentLevel;
 
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime occurTime;
 
     private String location;
 
     @Size(max = 2000, message = "描述长度不能超过2000")
     private String description;
+
+    private Integer deathCount;
+
+    private Double propertyLoss;
 
     private MultipartFile[] images;
 
@@ -74,6 +80,22 @@ public class IncidentReportRequest {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public Integer getDeathCount() {
+        return deathCount;
+    }
+
+    public void setDeathCount(Integer deathCount) {
+        this.deathCount = deathCount;
+    }
+
+    public Double getPropertyLoss() {
+        return propertyLoss;
+    }
+
+    public void setPropertyLoss(Double propertyLoss) {
+        this.propertyLoss = propertyLoss;
     }
 
     public MultipartFile[] getImages() {

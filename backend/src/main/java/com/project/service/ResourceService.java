@@ -2,8 +2,10 @@ package com.project.service;
 
 import com.project.annotation.SystemAuditLog;
 import com.project.entity.mysql.EmergencyResource;
+import com.project.entity.mysql.Incident;
 import com.project.entity.mysql.ResourceDispatchRecord;
 import com.project.repository.mysql.EmergencyResourceRepository;
+import com.project.repository.mysql.IncidentRepository;
 import com.project.repository.mysql.ResourceDispatchRecordRepository;
 import com.project.util.RedisLockUtil;
 import jakarta.persistence.EntityManager;
@@ -27,6 +29,7 @@ public class ResourceService {
 
     private final EmergencyResourceRepository resourceRepository;
     private final ResourceDispatchRecordRepository dispatchRecordRepository;
+    private final IncidentRepository incidentRepository;
     private final RedisLockUtil redisLockUtil;
 
     @PersistenceContext(unitName = "mysql")
@@ -34,9 +37,11 @@ public class ResourceService {
 
     public ResourceService(EmergencyResourceRepository resourceRepository,
                           ResourceDispatchRecordRepository dispatchRecordRepository,
+                          IncidentRepository incidentRepository,
                           RedisLockUtil redisLockUtil) {
         this.resourceRepository = resourceRepository;
         this.dispatchRecordRepository = dispatchRecordRepository;
+        this.incidentRepository = incidentRepository;
         this.redisLockUtil = redisLockUtil;
     }
 
@@ -142,6 +147,60 @@ public class ResourceService {
             return Map.of(
                     "success", true,
                     "message", "资源释放成功",
+                    "resource", resource,
+                    "recordId", record.getRecordId()
+            );
+        } finally {
+            redisLockUtil.unlock(lockKey);
+        }
+    }
+
+    @Transactional("mysqlTransactionManager")
+    @SystemAuditLog(module = "resource", action = "allocate", actionType = "UPDATE")
+    public Map<String, Object> allocateResource(String resourceId, Integer quantity, String incidentId, String planId, String remark) {
+        String lockKey = "resource:" + resourceId;
+
+        if (!redisLockUtil.lock(lockKey)) {
+            throw new RuntimeException("资源正在被其他操作占用，请稍后重试");
+        }
+
+        try {
+            EmergencyResource resource = resourceRepository.findByResourceId(resourceId)
+                    .orElseThrow(() -> new IllegalArgumentException("资源不存在"));
+
+            if (resource.getLockedStock() < quantity) {
+                throw new IllegalArgumentException("已锁定库存不足，当前锁定: " + resource.getLockedStock());
+            }
+
+            int updated = resourceRepository.allocateResource(resourceId, quantity);
+            if (updated == 0) {
+                throw new RuntimeException("分配资源失败");
+            }
+
+            ResourceDispatchRecord record = new ResourceDispatchRecord();
+            record.setRecordId(UUID.randomUUID().toString());
+            record.setResourceId(resourceId);
+            record.setResourceName(resource.getResourceName());
+            record.setIncidentId(incidentId);
+            record.setPlanId(planId);
+            record.setDispatchType("allocate");
+            record.setQuantity(quantity);
+            record.setFromLocation(resource.getLocation());
+            record.setOperatorId(getCurrentUserId());
+            record.setOperatorName(getCurrentUsername());
+            record.setStatus("completed");
+            record.setRemark(remark);
+
+            dispatchRecordRepository.save(record);
+
+            entityManager.flush();
+            entityManager.refresh(resource);
+
+            logger.info("资源分配出库成功，resourceId: {}, quantity: {}, incidentId: {}", resourceId, quantity, incidentId);
+
+            return Map.of(
+                    "success", true,
+                    "message", "资源分配成功",
                     "resource", resource,
                     "recordId", record.getRecordId()
             );

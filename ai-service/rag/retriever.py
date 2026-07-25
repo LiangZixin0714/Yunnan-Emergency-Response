@@ -6,7 +6,8 @@ import sys
 from typing import List, Dict
 
 import psycopg2
-from sentence_transformers import SentenceTransformer
+import torch
+from transformers import AutoModel, AutoTokenizer
 
 # 添加项目根目录到sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,19 +29,27 @@ VECTOR_DIM = 512
 
 # 全局变量
 _embedding_model = None
+_embedding_tokenizer = None
 _connection = None
 
 
 def _get_embedding_model():
-    """获取Embedding模型实例（懒加载）。"""
-    global _embedding_model
+    """获取Embedding模型和tokenizer实例（懒加载，使用transformers库）。"""
+    global _embedding_model, _embedding_tokenizer
     if _embedding_model is None:
         logger.info(f"🔄 正在加载Embedding模型: {EMBEDDING_MODEL_NAME}")
-        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-        os.environ["HF_HUB_DISABLE_XET"] = "1"
-        _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        _embedding_tokenizer = AutoTokenizer.from_pretrained(
+            EMBEDDING_MODEL_NAME,
+            local_files_only=True
+        )
+        _embedding_model = AutoModel.from_pretrained(
+            EMBEDDING_MODEL_NAME,
+            local_files_only=True
+        )
+        _embedding_model = _embedding_model.to("cpu")
+        _embedding_model.eval()
         logger.info("✅ Embedding模型加载成功！")
-    return _embedding_model
+    return _embedding_model, _embedding_tokenizer
 
 
 def _get_connection():
@@ -108,7 +117,7 @@ def _ensure_table():
 
 
 def generate_embedding(text: str) -> List[float]:
-    """生成文本的Embedding向量。
+    """生成文本的Embedding向量（使用transformers库的深度学习模型）。
     
     Args:
         text: 输入文本
@@ -116,9 +125,27 @@ def generate_embedding(text: str) -> List[float]:
     Returns:
         Embedding向量列表
     """
-    model = _get_embedding_model()
-    embedding = model.encode(text).tolist()
-    return embedding
+    model, tokenizer = _get_embedding_model()
+    
+    inputs = tokenizer(
+        text,
+        padding=True,
+        truncation=True,
+        max_length=512,
+        return_tensors="pt"
+    )
+    
+    with torch.no_grad():
+        outputs = model(**inputs)
+        last_hidden_state = outputs.last_hidden_state
+    
+    attention_mask = inputs["attention_mask"]
+    mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+    sum_embeddings = torch.sum(last_hidden_state * mask, 1)
+    sum_mask = torch.clamp(mask.sum(1), min=1e-9)
+    embeddings = sum_embeddings / sum_mask
+    
+    return embeddings.squeeze().tolist()
 
 
 def retrieve_plans(query: str, limit: int = 5) -> List[Dict[str, any]]:
