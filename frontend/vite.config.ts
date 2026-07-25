@@ -9,6 +9,17 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  // server: {
+  //   port: 3000,
+  //   proxy: {
+  //     '/api': {
+  //       target: 'http://localhost:8080',
+  //       changeOrigin: true,
+  //       secure: false,
+  //       rewrite: (path) => path.replace(/^\/api/, '/api')
+  //     }
+  //   }
+  // },
   server: {
     port: 3000,
     proxy: {
@@ -16,7 +27,10 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '/api')
+        rewrite: (path) => path.replace(/^\/api/, '/api'),
+        // 【关键补充】：禁用代理超时，确保 SSE 长连接不被掐断
+        timeout: 0,
+        proxyTimeout: 0,
       }
     }
   },

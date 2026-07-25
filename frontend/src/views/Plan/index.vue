@@ -30,13 +30,16 @@ const disposalPlanStatusMap = Object.fromEntries(
     { label, type: DisposalPlanStatusTagType[key as DisposalPlanStatusValue] },
   ])
 )
-
 function initEditor(): void {
   if (!editorRef.value) return
   vditorInstance = new Vditor(editorRef.value, {
     height: 500,
     mode: 'sv',
     theme: 'classic',
+    // 【必须加上 cache.id，防止 Vditor 内部报错崩溃】
+    cache: {
+      enable: false, // 或者给个唯一字符串 id，比如 id: 'disposal-plan-editor'
+    },
     toolbar: ['bold', 'italic', 'heading', 'list', 'quote', 'link', 'hr'],
     preview: {
       theme: {
@@ -48,6 +51,23 @@ function initEditor(): void {
     },
   })
 }
+// function initEditor(): void {
+//   if (!editorRef.value) return
+//   vditorInstance = new Vditor(editorRef.value, {
+//     height: 500,
+//     mode: 'sv',
+//     theme: 'classic',
+//     toolbar: ['bold', 'italic', 'heading', 'list', 'quote', 'link', 'hr'],
+//     preview: {
+//       theme: {
+//         current: 'classic',
+//       },
+//     },
+//     input: (value) => {
+//       editableContent.value = value
+//     },
+//   })
+// }
 
 function updateEditorContent(content: string): void {
   if (vditorInstance) {
@@ -98,15 +118,111 @@ async function selectPlan(planId: string): Promise<void> {
   }
 }
 
+// async function handleSaveDraft(): Promise<void> {
+//   const content = vditorInstance?.getValue() || editableContent.value
+//   if (!content.trim()) {
+//     ElMessage.warning('方案内容不能为空')
+//     return
+//   }
+//   try {
+//     await disposalPlanStore.saveDisposalPlan(
+//       planStore.currentPlan?.id ?? 0,
+//       content,
+//       selectedIncidentId.value
+//     )
+//     ElMessage.success('草稿已保存')
+//     if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+//   } catch {
+//     ElMessage.error('草稿保存失败，请重试')
+//   }
+// }
+
+// async function handleSubmitDisposalPlan(): Promise<void> {
+//   const content = vditorInstance?.getValue() || editableContent.value
+//   if (!content.trim()) {
+//     ElMessage.warning('方案内容不能为空，请先拟定处置方案')
+//     return
+//   }
+//   try {
+//     await disposalPlanStore.submitDisposalPlan(
+//       planStore.currentPlan?.id ?? 0,
+//       content,
+//       selectedIncidentId.value
+//     )
+//     ElMessage.success('处置方案已提交给资源管理员')
+//     if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+//   } catch {
+//     ElMessage.error('提交失败，请稍后重试')
+//   }
+// }
+// async function handleSaveDraft(): Promise<void> {
+//   const content = vditorInstance?.getValue() || editableContent.value
+//   if (!content.trim()) {
+//     ElMessage.warning('方案内容不能为空')
+//     return
+//   }
+//   // 【修复】：优先取 planId，如果没有则提示或兼容
+//   const targetPlanId = planStore.currentPlan?.planId
+//   if (!targetPlanId) {
+//     ElMessage.warning('请先选择或生成一个有效的方案')
+//     return
+//   }
+
+//   try {
+//     await disposalPlanStore.saveDisposalPlan(
+//       targetPlanId as any, // 如果后端要求 String 就传 string，要求 Long 根据实际后端调整
+//       content,
+//       selectedIncidentId.value
+//     )
+//     ElMessage.success('草稿已保存')
+//     if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+//   } catch {
+//     ElMessage.error('草稿保存失败，请重试')
+//   }
+// }
+
+// async function handleSubmitDisposalPlan(): Promise<void> {
+//   const content = vditorInstance?.getValue() || editableContent.value
+//   if (!content.trim()) {
+//     ElMessage.warning('方案内容不能为空，请先拟定处置方案')
+//     return
+//   }
+  
+//   const targetPlanId = planStore.currentPlan?.planId
+//   if (!targetPlanId) {
+//     ElMessage.warning('请先选择或生成一个有效的方案')
+//     return
+//   }
+
+//   try {
+//     await disposalPlanStore.submitDisposalPlan(
+//       targetPlanId as any,
+//       content,
+//       selectedIncidentId.value
+//     )
+//     ElMessage.success('处置方案已提交给资源管理员')
+//     if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+//   } catch {
+//     ElMessage.error('提交失败，请稍后重试')
+//   }
+// }
 async function handleSaveDraft(): Promise<void> {
   const content = vditorInstance?.getValue() || editableContent.value
   if (!content.trim()) {
     ElMessage.warning('方案内容不能为空')
     return
   }
+  
+  // 【关键修复】：必须取数字自增主键 id，而不是字符串 planId
+  const targetId = planStore.currentPlan?.id
+  if (!targetId) {
+    ElMessage.warning('请先选择或生成一个有效的方案')
+    return
+  }
+
   try {
     await disposalPlanStore.saveDisposalPlan(
-      planStore.currentPlan?.id ?? 0,
+      targetId, // 传数字 Long id
       content,
       selectedIncidentId.value
     )
@@ -123,9 +239,17 @@ async function handleSubmitDisposalPlan(): Promise<void> {
     ElMessage.warning('方案内容不能为空，请先拟定处置方案')
     return
   }
+  
+  // 【关键修复】：必须取数字自增主键 id，而不是字符串 planId
+  const targetId = planStore.currentPlan?.id
+  if (!targetId) {
+    ElMessage.warning('请先选择或生成一个有效的方案')
+    return
+  }
+
   try {
     await disposalPlanStore.submitDisposalPlan(
-      planStore.currentPlan?.id ?? 0,
+      targetId, // 传数字 Long id
       content,
       selectedIncidentId.value
     )

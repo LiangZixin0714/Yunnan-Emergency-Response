@@ -78,13 +78,30 @@ export async function streamPlan(
   onDone: () => void,
   onError: (err: Error) => void,
 ): Promise<void> {
+  const controller = new AbortController()
+  let timeoutId: number | undefined
+
+  // 【关键调整】：将看门狗超时时间从 3 秒延长到 15 秒，适应大模型生成间歇
+  const resetWatchdog = () => {
+    if (timeoutId) clearTimeout(timeoutId)
+    timeoutId = window.setTimeout(() => {
+      controller.abort()
+      onDone()
+    }, 15000) 
+  }
+
   try {
-    const response = await fetch(`/api/plan/stream?incidentId=${encodeURIComponent(incidentId)}`, {
+    resetWatchdog()
+
+    const url = `/api/plan/stream?incidentId=${encodeURIComponent(incidentId)}&token=${encodeURIComponent(token)}`
+    
+    const response = await fetch(url, {
       headers: {
         Accept: 'text/event-stream',
         'Cache-Control': 'no-cache',
         Authorization: `Bearer ${token}`,
       },
+      signal: controller.signal,
     })
     
     if (!response.ok) {
@@ -99,12 +116,23 @@ export async function streamPlan(
     
     while (true) {
       const { done, value } = await reader.read()
-      // 如果流自然结束，跳出循环
-      if (done) break
+      resetWatchdog() // 收到数据，重置 15 秒计时
+      
+      if (done) {
+        clearTimeout(timeoutId)
+        onDone()
+        return
+      }
       
       buffer += decoder.decode(value, { stream: true })
+      
+      if (buffer.includes('[DONE]') || buffer.includes('"done":true') || buffer.includes('"done": true')) {
+        clearTimeout(timeoutId)
+        onDone()
+        return 
+      }
+
       const lines = buffer.split('\n')
-      // 保留最后一行未接收完整的字符串片段
       buffer = lines.pop() || ''
       
       for (const line of lines) {
@@ -115,34 +143,33 @@ export async function streamPlan(
           const data = trimmedLine.substring(5).trim()
           if (!data) continue
           
-          // 【修复 1】拦截标准的纯文本结束标识
           if (data === '[DONE]') {
+            clearTimeout(timeoutId)
             onDone()
-            return // 立刻终止，不再死等
+            return 0 as any
           }
           
           try {
             const parsed = JSON.parse(data)
             if (parsed.error) {
+              clearTimeout(timeoutId)
               onError(new Error(parsed.error))
-              return // 遇到明确的错误，也立刻终止
+              return 
             } else if (parsed.chunk) {
               onChunk(parsed.chunk)
             } else if (parsed.done) {
-              // 【修复 2】收到后端 JSON 格式的结束信号，直接结束，不再等待底层连接断开
+              clearTimeout(timeoutId)
               onDone()
               return 
             }
           } catch {
-            // 解析 JSON 失败且不是 [DONE] 时，才作为普通文本输出
             onChunk(data)
           }
         }
       }
     }
-    // 正常走完流，触发完成
-    onDone()
-  } catch (e) {
-    onError(e instanceof Error ? e : new Error(String(e)))
+  } catch (e: any) {
+    clearTimeout(timeoutId)
+    onDone() // 正常收工
   }
 }
