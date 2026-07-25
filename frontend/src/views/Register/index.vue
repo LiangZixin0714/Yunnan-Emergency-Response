@@ -67,7 +67,7 @@ async function handleRegister(): Promise<void> {
         </el-form-item>
         <el-form-item>
           <el-button link type="primary" @click="router.push('/login')">已有账号？去登录</el-button>
-          <el-button link type="primary" @click="router.push('/role-application')">申请更高权限角色</el-button>
+
         </el-form-item>
       </el-form>
     </div>

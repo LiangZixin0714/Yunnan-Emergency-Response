@@ -1,13 +1,17 @@
-let _token: string | null = null
+const TOKEN_KEY = 'auth_token'
 
 export function getStoredToken(): string | null {
-  return _token
+  return sessionStorage.getItem(TOKEN_KEY)
 }
 
 export function setStoredToken(token: string | null): void {
-  _token = token
+  if (token) {
+    sessionStorage.setItem(TOKEN_KEY, token)
+  } else {
+    sessionStorage.removeItem(TOKEN_KEY)
+  }
 }
 
 export function clearStoredToken(): void {
-  _token = null
+  sessionStorage.removeItem(TOKEN_KEY)
 }

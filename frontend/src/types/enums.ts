@@ -207,6 +207,7 @@ export const ResourceDispatchStatusTagType: Record<ResourceDispatchStatusValue, 
 export const ApplicationStatus = {
   PENDING: 'pending',
   APPROVED: 'approved',
+  RECEIVED: 'received',
   REJECTED: 'rejected',
 } as const
 
@@ -215,11 +216,13 @@ export type ApplicationStatusValue = (typeof ApplicationStatus)[keyof typeof App
 export const ApplicationStatusLabel: Record<ApplicationStatusValue, string> = {
   pending: '待审核',
   approved: '已通过',
+  received: '已接收',
   rejected: '已驳回',
 }
 
 export const ApplicationStatusTagType: Record<ApplicationStatusValue, string> = {
   pending: 'warning',
   approved: 'success',
+  received: 'info',
   rejected: 'danger',
 }

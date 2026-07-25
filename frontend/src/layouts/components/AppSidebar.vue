@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useRoleApplicationStore } from '@/stores/role-application'
 import type { UserRoleValue } from '@/types/enums'
 
 defineProps<{
@@ -11,6 +12,23 @@ defineProps<{
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const roleApplicationStore = useRoleApplicationStore()
+
+const hasApprovedApplication = computed(() => {
+  return roleApplicationStore.myApplications.some(
+    (app) => app.status === 'approved'
+  )
+})
+
+function handleApplyRole(): void {
+  router.push('/role-application')
+}
+
+onMounted(() => {
+  if (authStore.roleName && authStore.roleName !== 'ADMIN' && authStore.userId) {
+    roleApplicationStore.fetchMyApplications(authStore.userId)
+  }
+})
 
 const menuItems = computed(() => {
   const mainRoute = router.options.routes.find((r) => r.path === '/')
@@ -85,6 +103,13 @@ function handleMenuSelect(index: string): void {
         </el-menu-item>
       </template>
     </el-menu>
+    <div v-if="authStore.roleName && authStore.roleName !== 'ADMIN'" class="app-sidebar__apply-role">
+      <el-badge :value="1" :hidden="!hasApprovedApplication" class="app-sidebar__badge">
+        <el-button type="primary" plain @click="handleApplyRole" style="width: 100%">
+          申请其他角色
+        </el-button>
+      </el-badge>
+    </div>
   </aside>
 </template>
 
@@ -100,6 +125,8 @@ function handleMenuSelect(index: string): void {
   overflow-y: auto;
   overflow-x: hidden;
   z-index: 100;
+  display: flex;
+  flex-direction: column;
 }
 
 .app-sidebar--collapsed {
@@ -108,6 +135,7 @@ function handleMenuSelect(index: string): void {
 
 .app-sidebar__logo {
   height: var(--header-height);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -120,5 +148,25 @@ function handleMenuSelect(index: string): void {
   font-size: var(--font-size-lg);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.app-sidebar :deep(.el-menu) {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.app-sidebar__apply-role {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+}
+
+.app-sidebar__badge {
+  width: 100%;
+}
+
+.app-sidebar__badge :deep(.el-badge__content) {
+  top: 4px;
 }
 </style>

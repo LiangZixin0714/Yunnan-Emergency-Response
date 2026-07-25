@@ -126,10 +126,10 @@ function initMockData(): void {
 
   roleAppIdCounter = 4
   mockRoleApplications = [
-    { id: 1, applicationId: 'role-app-001', userId: 4, username: 'viewer', realName: '张信息员', targetRole: 'OPERATOR', reason: '本人具备应急指挥相关经验，申请成为指挥人员', status: 'pending', reviewerId: null, reviewerName: null, rejectReason: null, reviewedAt: null, createdAt: '2026-07-20T09:00:00', updatedAt: '2026-07-20T09:00:00' },
-    { id: 2, applicationId: 'role-app-002', userId: 4, username: 'viewer', realName: '张信息员', targetRole: 'RESOURCE_MANAGER', reason: '希望参与资源管理工作', status: 'approved', reviewerId: 1, reviewerName: '系统管理员', rejectReason: null, reviewedAt: '2026-07-21T10:00:00', createdAt: '2026-07-19T14:00:00', updatedAt: '2026-07-21T10:00:00' },
-    { id: 3, applicationId: 'role-app-003', userId: 3, username: 'resource', realName: '王资源', targetRole: 'OPERATOR', reason: '申请转岗至指挥岗位', status: 'rejected', reviewerId: 1, reviewerName: '系统管理员', rejectReason: '当前岗位人员不足，暂不支持转岗', reviewedAt: '2026-07-22T08:00:00', createdAt: '2026-07-21T16:00:00', updatedAt: '2026-07-22T08:00:00' },
-    { id: 4, applicationId: 'role-app-004', userId: 2, username: 'operator', realName: '李指挥', targetRole: 'ADMIN', reason: '需要系统管理权限进行平台配置', status: 'pending', reviewerId: null, reviewerName: null, rejectReason: null, reviewedAt: null, createdAt: '2026-07-22T11:00:00', updatedAt: '2026-07-22T11:00:00' },
+    { id: 1, applicationId: 'role-app-001', userId: 4, username: 'viewer', realName: '张信息员', targetRole: 'OPERATOR', reason: '本人具备应急指挥相关经验，申请成为指挥人员', status: 'pending', reviewerId: null, reviewerName: null, rejectReason: null, reviewedAt: null, receivedAt: null, createdAt: '2026-07-20T09:00:00', updatedAt: '2026-07-20T09:00:00' },
+    { id: 2, applicationId: 'role-app-002', userId: 4, username: 'viewer', realName: '张信息员', targetRole: 'RESOURCE_MANAGER', reason: '希望参与资源管理工作', status: 'approved', reviewerId: 1, reviewerName: '系统管理员', rejectReason: null, reviewedAt: '2026-07-21T10:00:00', receivedAt: null, createdAt: '2026-07-19T14:00:00', updatedAt: '2026-07-21T10:00:00' },
+    { id: 3, applicationId: 'role-app-003', userId: 3, username: 'resource', realName: '王资源', targetRole: 'OPERATOR', reason: '申请转岗至指挥岗位', status: 'rejected', reviewerId: 1, reviewerName: '系统管理员', rejectReason: '当前岗位人员不足，暂不支持转岗', reviewedAt: '2026-07-22T08:00:00', receivedAt: null, createdAt: '2026-07-21T16:00:00', updatedAt: '2026-07-22T08:00:00' },
+    { id: 4, applicationId: 'role-app-004', userId: 2, username: 'operator', realName: '李指挥', targetRole: 'ADMIN', reason: '需要系统管理权限进行平台配置', status: 'pending', reviewerId: null, reviewerName: null, rejectReason: null, reviewedAt: null, receivedAt: null, createdAt: '2026-07-22T11:00:00', updatedAt: '2026-07-22T11:00:00' },
   ]
 
 
@@ -159,8 +159,10 @@ function initMockData(): void {
 }
 initMockData()
 
-function success(data: unknown) { return { code: 0, message: 'success', data, timestamp: new Date().toISOString() } }
-function error(message: string, code = 400) { return { code, message, data: null, timestamp: new Date().toISOString() } }
+function fmtNow(): string { return new Date().toISOString().replace(/\.\d{3}Z$/, '').replace('T', ' ') }
+
+function success(data: unknown) { return { code: 0, message: 'success', data, timestamp: fmtNow() } }
+function error(message: string, code = 400) { return { code, message, data: null, timestamp: fmtNow() } }
 
 function parseBody(req: any): Promise<any> {
   return new Promise((resolve) => {
@@ -200,7 +202,7 @@ export function mockPlugin() {
           const body = await parseBody(req)
           const user = MOCK_USERS.find((u) => u.username === body.username)
           if (user && MOCK_PASSWORDS[body.username] === body.password) {
-            res.end(JSON.stringify(success({ token: MOCK_TOKEN, tokenType: 'Bearer', expiresIn: 86400000, username: user.username, realName: user.realName, roleName: user.roleName })))
+            res.end(JSON.stringify(success({ token: MOCK_TOKEN, tokenType: 'Bearer', expiresIn: 86400000, userId: user.id, username: user.username, realName: user.realName, roleName: user.roleName })))
           } else { res.end(JSON.stringify(error('用户名或密码错误', 401))) }
           return
         }
@@ -208,7 +210,8 @@ export function mockPlugin() {
         if (url === '/api/auth/register' && req.method === 'POST') {
           const body = await parseBody(req)
           if (MOCK_USERS.find((u) => u.username === body.username)) { res.end(JSON.stringify(error('用户名已存在'))); return }
-          const nu = { id: MOCK_USERS.length + 1, username: body.username, realName: body.realName || null, email: null, phone: null, roleId: 4, status: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+          const now = fmtNow()
+          const nu = { id: MOCK_USERS.length + 1, username: body.username, realName: body.realName || null, roleName: 'VIEWER', roleId: 4, status: 1, email: null, phone: null, createdAt: now, updatedAt: now }
           MOCK_PASSWORDS[body.username] = body.password; MOCK_USERS.push(nu as any)
           res.end(JSON.stringify(success(nu))); return
         }
@@ -251,7 +254,7 @@ export function mockPlugin() {
         }
         if (url === '/api/incident/report' && req.method === 'POST') {
           const fields = await parseFormData(req); incidentIdCounter++
-          const now = new Date().toISOString()
+          const now = fmtNow()
           const ni = {
             id: mockIncidents.length + 1, incidentId: `mock-${String(incidentIdCounter).padStart(4, '0')}`,
             incidentName: fields.incidentName || '新上报灾情事件', disasterType: fields.disasterType || 'earthquake',
@@ -300,13 +303,13 @@ export function mockPlugin() {
           )
           if (duplicate) { res.end(JSON.stringify(error('已存在相同的待审核申请'))); return }
           roleAppIdCounter++
-          const now = new Date().toISOString()
+          const now = fmtNow()
           const app = {
             id: mockRoleApplications.length + 1,
             applicationId: `role-app-${String(roleAppIdCounter).padStart(3, '0')}`,
             userId, username: user?.username || '', realName: user?.realName || null,
             targetRole: body.targetRole, reason: body.reason || '',
-            status: 'pending', reviewerId: null, reviewerName: null, rejectReason: null, reviewedAt: null,
+            status: 'pending', reviewerId: null, reviewerName: null, rejectReason: null, reviewedAt: null, receivedAt: null,
             createdAt: now, updatedAt: now,
           }
           mockRoleApplications.push(app)
@@ -326,15 +329,11 @@ export function mockPlugin() {
           const app = mockRoleApplications.find((a) => a.id === body.id)
           if (!app) { res.end(JSON.stringify(error('申请不存在'))); return }
           if (app.status !== 'pending') { res.end(JSON.stringify(error('该申请已被审核'))); return }
-          const now = new Date().toISOString()
+          const now = fmtNow()
           const reviewer = MOCK_USERS.find((u) => u.id === (body.reviewerId || 1))
           if (body.approved) {
             app.status = 'approved'
-            const targetUser = MOCK_USERS.find((u) => u.id === app.userId)
-            if (targetUser) {
-              targetUser.roleName = app.targetRole
-              targetUser.updatedAt = now
-            }
+
           } else {
             app.status = 'rejected'
             app.rejectReason = body.reason || null
@@ -343,6 +342,25 @@ export function mockPlugin() {
           app.reviewerName = reviewer?.realName || null
           app.reviewedAt = now
           app.updatedAt = now
+          res.end(JSON.stringify(success(app))); return
+        }
+
+        if (url === '/api/role-application/receive' && req.method === 'POST') {
+          const body = await parseBody(req)
+          const app = mockRoleApplications.find((a) => a.id === body.id)
+          if (!app) { res.end(JSON.stringify(error('申请不存在'))); return }
+          if (app.status !== 'approved') {
+            res.end(JSON.stringify(error('仅已通过的申请可接收'))); return
+          }
+          const now = fmtNow()
+          app.status = 'received'
+          app.receivedAt = now
+          app.updatedAt = now
+          const targetUser = MOCK_USERS.find((u) => u.id === app.userId)
+          if (targetUser) {
+            targetUser.roleName = app.targetRole
+            targetUser.updatedAt = now
+          }
           res.end(JSON.stringify(success(app))); return
         }
 
@@ -370,7 +388,7 @@ export function mockPlugin() {
             if (adminCount <= 1) { res.end(JSON.stringify(error('系统至少需要保留一个管理员角色'))); return }
           }
           targetUser.roleName = body.targetRole
-          targetUser.updatedAt = new Date().toISOString()
+          targetUser.updatedAt = fmtNow()
           res.end(JSON.stringify(success({ userId: targetUser.id, roleName: targetUser.roleName }))); return
         }
 
@@ -383,7 +401,7 @@ export function mockPlugin() {
             if (filtered.length === 0) {
               const incident = mockIncidents.find((i: any) => i.incidentId === incidentId)
               if (incident && (incident as any).disposalPlanStatus) {
-                const now = new Date().toISOString()
+                const now = fmtNow()
                 const autoPlan = {
                   id: mockDisposalPlans.length + 1,
                   disposalPlanId: `dp-auto-${String(mockDisposalPlans.length + 1).padStart(4, '0')}`,
@@ -407,7 +425,7 @@ export function mockPlugin() {
         if (url === '/api/disposal-plan/submit' && req.method === 'POST') {
           const body = await parseBody(req)
           let plan = mockDisposalPlans.find((d) => d.id === body.id)
-          const now = new Date().toISOString()
+          const now = fmtNow()
           if (!plan) {
             plan = {
               id: mockDisposalPlans.length + 1,
@@ -455,7 +473,7 @@ export function mockPlugin() {
         if (url === '/api/disposal-plan/save-draft' && req.method === 'POST') {
           const body = await parseBody(req)
           let plan = mockDisposalPlans.find((d) => d.id === body.id)
-          const now = new Date().toISOString()
+          const now = fmtNow()
           if (!plan) {
             plan = {
               id: mockDisposalPlans.length + 1,
@@ -503,7 +521,7 @@ export function mockPlugin() {
           if (!plan && body.incidentId) {
             const incident = mockIncidents.find((i: any) => i.incidentId === body.incidentId)
             if (incident && (incident as any).disposalPlanStatus === 'submitted') {
-              const now = new Date().toISOString()
+              const now = fmtNow()
               plan = {
                 id: mockDisposalPlans.length + 1,
                 disposalPlanId: `dp-reject-${String(mockDisposalPlans.length + 1).padStart(4, '0')}`,
@@ -521,7 +539,7 @@ export function mockPlugin() {
           }
           if (!plan) { res.end(JSON.stringify(error('处置方案不存在'))); return }
           if (plan.status !== 'submitted') { res.end(JSON.stringify(error('仅已提交的方案可以驳回'))); return }
-          const now = new Date().toISOString()
+          const now = fmtNow()
           plan.status = 'rejected'
           plan.rejectReason = body.rejectReason || null
           plan.updatedAt = now
@@ -548,7 +566,7 @@ export function mockPlugin() {
           if (new Set(resourceIds).size !== resourceIds.length) {
             res.end(JSON.stringify(error('不允许重复选择同一种资源'))); return
           }
-          const now = new Date().toISOString()
+          const now = fmtNow()
           const createdRequests: any[] = []
           for (const item of body.items) {
             if (!item.resourceId || !item.quantity || item.quantity <= 0) continue
@@ -586,7 +604,7 @@ export function mockPlugin() {
           const warning = mockShortageWarnings.find((w) => w.id === body.id)
           if (!warning) { res.end(JSON.stringify(error('警告记录不存在'))); return }
           if (warning.status !== 'pending') { res.end(JSON.stringify(error('该警告已被处理'))); return }
-          const now = new Date().toISOString()
+          const now = fmtNow()
           if (body.action === 'replenish') {
             const resource = mockResources.find((r) => r.resourceType === warning.resourceType)
             if (resource) {

@@ -21,6 +21,7 @@ export interface LoginResult {
   token: string
   tokenType: string
   expiresIn: number
+  userId: number
   username: string
   realName: string
   roleName: UserRoleValue

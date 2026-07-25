@@ -13,6 +13,7 @@ export interface RoleApplication {
   reviewerName: string | null
   rejectReason: string | null
   reviewedAt: string | null
+  receivedAt: string | null
   createdAt: string
   updatedAt: string
 }
