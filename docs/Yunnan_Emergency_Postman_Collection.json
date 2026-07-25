@@ -1,0 +1,1080 @@
+{
+	"info": {
+		"_postman_id": "yunnan-emergency-platform-collection",
+		"name": "云南自然灾害应急协同决策平台 - API 测试集合",
+		"description": "云南自然灾害应急协同决策平台完整接口测试集合，包含认证、灾情管理、方案调度、资源管理、数据大屏等模块。\n\n## 使用说明\n1. 导入此集合到 Postman\n2. 创建环境变量：baseUrl（默认 http://localhost:8080）\n3. 先执行「用户登录」获取 Token\n4. 按顺序执行各模块接口",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"version": "2.0.0"
+	},
+	"item": [
+		{
+			"name": "1. 认证模块 (Auth)",
+			"item": [
+				{
+					"name": "用户注册",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testuser_{{timestamp}}\",\n    \"password\": \"123456\",\n    \"realName\": \"测试用户\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "register"]
+						},
+						"description": "用户注册账号，系统自动分配默认角色。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应包含用户数据\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"id\");",
+									"    pm.expect(jsonData.data).to.have.property(\"username\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "用户登录",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"admin\",\n    \"password\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "用户登录系统，获取 JWT Token 用于后续接口认证。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应包含 Token\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"token\");",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.code === 0 && jsonData.data && jsonData.data.token) {",
+									"    pm.environment.set(\"token\", jsonData.data.token);",
+									"    pm.environment.set(\"username\", jsonData.data.username);",
+									"    pm.environment.set(\"roleName\", jsonData.data.roleName);",
+									"    console.log(\"Token 已保存到环境变量: \" + jsonData.data.token.substring(0, 30) + \"...\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "用户认证相关接口，包含注册和登录功能。登录成功后自动保存 Token 到环境变量。"
+		},
+		{
+			"name": "2. 灾情管理 (Incident)",
+			"item": [
+				{
+					"name": "灾情上报 (multipart/form-data)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "incidentName",
+									"value": "测试灾情上报_{{timestamp}}",
+									"type": "text"
+								},
+								{
+									"key": "disasterType",
+									"value": "flood",
+									"type": "text"
+								},
+								{
+									"key": "incidentLevel",
+									"value": "III",
+									"type": "text"
+								},
+								{
+									"key": "location",
+									"value": "云南省昆明市五华区",
+									"type": "text"
+								},
+								{
+									"key": "description",
+									"value": "测试灾情描述：昆明市五华区遭遇强降雨，部分路段积水严重，需要紧急处置。",
+									"type": "text"
+								},
+								{
+									"key": "images",
+									"value": "",
+									"type": "file",
+									"description": "【注意】请手动选择图片文件，最多5张"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/incident/report",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "incident", "report"]
+						},
+						"description": "上报灾情信息，支持图文混合上传。\n\n【注意】图片字段需要手动选择文件，无法预设。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应包含 incidentId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"incidentId\");",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.code === 0 && jsonData.data && jsonData.data.incidentId) {",
+									"    pm.environment.set(\"incidentId\", jsonData.data.incidentId);",
+									"    console.log(\"incidentId 已保存到环境变量: \" + jsonData.data.incidentId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "获取灾情列表",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/incident/list?page=1&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "incident", "list"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "页码，默认1"
+								},
+								{
+									"key": "size",
+									"value": "10",
+									"description": "每页条数，默认10"
+								},
+								{
+									"key": "disasterType",
+									"value": "",
+									"description": "灾害类型筛选"
+								},
+								{
+									"key": "incidentLevel",
+									"value": "",
+									"description": "灾情级别筛选"
+								},
+								{
+									"key": "status",
+									"value": "",
+									"description": "状态筛选"
+								},
+								{
+									"key": "keyword",
+									"value": "",
+									"description": "关键词搜索"
+								}
+							]
+						},
+						"description": "分页获取灾情列表，支持多条件筛选。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应包含 total 和 list\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"total\");",
+									"    pm.expect(jsonData.data).to.have.property(\"list\");",
+									"    pm.expect(jsonData.data.list).to.be.an(\"array\");",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.code === 0 && jsonData.data && jsonData.data.list && jsonData.data.list.length > 0) {",
+									"    pm.environment.set(\"incidentId\", jsonData.data.list[0].incidentId);",
+									"    console.log(\"使用第一条记录的 incidentId: \" + jsonData.data.list[0].incidentId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "获取灾情详情",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/incident/detail?incidentId={{incidentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "incident", "detail"],
+							"query": [
+								{
+									"key": "incidentId",
+									"value": "{{incidentId}}",
+									"description": "灾情唯一标识"
+								}
+							]
+						},
+						"description": "根据灾情 ID 获取灾情详细信息。\n\n依赖：需要先执行「获取灾情列表」或「灾情上报」获取 incidentId"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应包含灾情详情\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"incidentId\");",
+									"    pm.expect(jsonData.data).to.have.property(\"incidentName\");",
+									"    pm.expect(jsonData.data).to.have.property(\"disasterType\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "灾情管理相关接口，包含上报、列表查询、详情查询。"
+		},
+		{
+			"name": "3. 方案调度与 AI (Plan & AI)",
+			"item": [
+				{
+					"name": "AI 方案生成 (REST)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"incidentId\": \"{{incidentId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/plan/generate",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "plan", "generate"]
+						},
+						"description": "根据灾情 ID 触发 AI 方案生成，返回方案 ID。方案生成采用异步处理，需后续通过轮询获取结果。\n\n依赖：需要先获取 incidentId"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应包含 planId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"planId\");",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.code === 0 && jsonData.data && jsonData.data.planId) {",
+									"    pm.environment.set(\"planId\", jsonData.data.planId);",
+									"    console.log(\"planId 已保存到环境变量: \" + jsonData.data.planId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "AI 方案流式输出 (SSE)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							},
+							{
+								"key": "Cache-Control",
+								"value": "no-cache"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/plan/stream?incidentId={{incidentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "plan", "stream"],
+							"query": [
+								{
+									"key": "incidentId",
+									"value": "{{incidentId}}",
+									"description": "灾情唯一标识"
+								}
+							]
+						},
+						"description": "【特殊说明】SSE 流式接口在 Postman 中的测试方法：\n\n1. 请求会持续保持连接，直到服务端推送完成\n2. 响应体为 text/event-stream 格式，包含多个 event: message 事件\n3. 响应时间较长（约25-125秒），需耐心等待\n4. Postman 会将所有 SSE 数据收集后一次性显示\n5. 建议使用 curl -N 或浏览器直接访问进行测试\n\n依赖：需要先获取 incidentId"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 Content-Type 包含 text/event-stream\", function () {",
+									"    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/event-stream\");",
+									"});",
+									"",
+									"pm.test(\"响应体不为空\", function () {",
+									"    pm.expect(pm.response.text()).to.not.be.empty;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "获取方案列表",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/plan/list?incidentId={{incidentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "plan", "list"],
+							"query": [
+								{
+									"key": "incidentId",
+									"value": "{{incidentId}}",
+									"description": "灾情唯一标识"
+								}
+							]
+						},
+						"description": "根据灾情 ID 获取该灾情相关的所有方案列表。\n\n依赖：需要先获取 incidentId"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应为数组\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.be.an(\"array\");",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.code === 0 && jsonData.data && jsonData.data.length > 0) {",
+									"    pm.environment.set(\"planId\", jsonData.data[0].planId);",
+									"    console.log(\"使用第一条记录的 planId: \" + jsonData.data[0].planId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "获取方案详情",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/plan/detail?planId={{planId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "plan", "detail"],
+							"query": [
+								{
+									"key": "planId",
+									"value": "{{planId}}",
+									"description": "方案唯一标识"
+								}
+							]
+						},
+						"description": "根据方案 ID 获取方案详细内容。\n\n依赖：需要先获取 planId"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应包含方案详情\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"planId\");",
+									"    pm.expect(jsonData.data).to.have.property(\"planTitle\");",
+									"    pm.expect(jsonData.data).to.have.property(\"planContent\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "审核方案",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"planId\": \"{{planId}}\",\n    \"action\": \"APPROVE\",\n    \"modifyContent\": null,\n    \"remark\": \"方案合理，同意执行\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/plan/review",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "plan", "review"]
+						},
+						"description": "针对 AI 生成的应急预案进行人工审核。\n\naction 枚举：\n- APPROVE: 通过审核\n- REJECT: 驳回审核\n- MODIFY: 修改方案\n\n依赖：需要先获取 planId"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"审核后状态为 approved\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"status\", \"approved\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "方案调度与 AI 相关接口，包含方案生成（REST和SSE）、详情、审核等功能。"
+		},
+		{
+			"name": "4. 资源管理 (Resource)",
+			"item": [
+				{
+					"name": "查询可用资源",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/resource/available",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "resource", "available"]
+						},
+						"description": "查询当前可用库存大于0的应急资源列表。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应为数组\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.be.an(\"array\");",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.code === 0 && jsonData.data && jsonData.data.length > 0) {",
+									"    pm.environment.set(\"resourceId\", jsonData.data[0].resourceId);",
+									"    console.log(\"使用第一条记录的 resourceId: \" + jsonData.data[0].resourceId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "锁定资源",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resourceId\": \"{{resourceId}}\",\n    \"quantity\": 10,\n    \"incidentId\": \"{{incidentId}}\",\n    \"planId\": \"{{planId}}\",\n    \"remark\": \"测试资源锁定\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/resource/lock",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "resource", "lock"]
+						},
+						"description": "锁定并分配资源（使用 Redis 分布式锁防止并发重复调度）。\n\n依赖：需要先获取 resourceId、incidentId、planId"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"锁定成功\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.success).to.eql(true);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "释放资源",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resourceId\": \"{{resourceId}}\",\n    \"quantity\": 5,\n    \"remark\": \"测试资源释放\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/resource/release",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "resource", "release"]
+						},
+						"description": "释放资源并归还库存。\n\n依赖：需要先获取 resourceId"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"释放成功\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.success).to.eql(true);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "查询调度记录",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/resource/dispatch-records",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "resource", "dispatch-records"],
+							"query": [
+								{
+									"key": "resourceId",
+									"value": "",
+									"description": "按资源ID筛选"
+								},
+								{
+									"key": "incidentId",
+									"value": "{{incidentId}}",
+									"description": "按灾情ID筛选"
+								}
+							]
+						},
+						"description": "查询资源调度记录列表。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应为数组\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "资源管理相关接口，包含可用资源查询、锁定、释放、调度记录查询。"
+		},
+		{
+			"name": "5. 数据大屏 (Dashboard)",
+			"item": [
+				{
+					"name": "获取概览数据",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/dashboard/overview",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "dashboard", "overview"]
+						},
+						"description": "获取大屏概览数据，包含灾情统计、资源统计等。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});",
+									"",
+									"pm.test(\"响应包含数据\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.not.be.null;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "获取趋势数据",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/dashboard/trend",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "dashboard", "trend"]
+						},
+						"description": "获取灾情趋势数据，用于图表展示。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "获取分布数据",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/dashboard/distribution",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "dashboard", "distribution"]
+						},
+						"description": "获取灾情分布数据，用于地图展示。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应 code 为 0\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.code).to.eql(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "数据大屏相关接口，包含概览、趋势、分布等统计数据。"
+		},
+		{
+			"name": "6. AI 服务直连 (Port 8001)",
+			"item": [
+				{
+					"name": "AI 服务健康检查",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8001/health",
+							"host": ["http://localhost:8001"],
+							"path": ["health"]
+						},
+						"description": "检查 AI 服务运行状态。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"服务状态为 ok\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql(\"ok\");",
+									"    pm.expect(jsonData.workflow_ready).to.eql(true);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "AI 方案生成 (直连)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"description\": \"云南省昆明市五华区发生4.5级地震，震源深度10公里，部分房屋受损，约500人受影响。\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8001/api/v1/generate-plan",
+							"host": ["http://localhost:8001"],
+							"path": ["api", "v1", "generate-plan"]
+						},
+						"description": "【注意】直接调用 AI 服务生成方案，响应时间较长（约25-125秒）。\n\n包含 RAG 检索和多 Agent 工作流处理。"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"HTTP 状态码为 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"响应包含 plan\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"plan\");",
+									"    pm.expect(jsonData.plan).to.be.a(\"string\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "AI 服务直连接口（端口 8001），用于调试和验证 AI 服务独立运行状态。"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"exec": [
+					"pm.environment.set(\"timestamp\", Date.now());"
+				],
+				"type": "text/javascript"
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string",
+			"description": "Spring Boot 后端地址"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string",
+			"description": "JWT Token，登录后自动获取"
+		},
+		{
+			"key": "incidentId",
+			"value": "",
+			"type": "string",
+			"description": "灾情 ID，上报或列表查询后自动获取"
+		},
+		{
+			"key": "planId",
+			"value": "",
+			"type": "string",
+			"description": "方案 ID，生成或列表查询后自动获取"
+		},
+		{
+			"key": "resourceId",
+			"value": "",
+			"type": "string",
+			"description": "资源 ID，查询可用资源后自动获取"
+		},
+		{
+			"key": "username",
+			"value": "",
+			"type": "string",
+			"description": "登录用户名"
+		},
+		{
+			"key": "roleName",
+			"value": "",
+			"type": "string",
+			"description": "用户角色"
+		}
+	]
+}
