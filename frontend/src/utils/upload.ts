@@ -16,10 +16,12 @@ export function buildIncidentFormData(data: IncidentReportData): FormData {
   if (data.occurTime) formData.append('occurTime', formatDateTime(data.occurTime))
   if (data.location) formData.append('location', data.location)
   if (data.description) formData.append('description', data.description)
+  if (data.deathCount !== undefined && data.deathCount !== null) formData.append('deathCount', String(data.deathCount))
+  if (data.propertyLoss !== undefined && data.propertyLoss !== null) formData.append('propertyLoss', String(data.propertyLoss))
 
-  if (data.images?.length) {
+  if (data.images && data.images.length > 0) {
     data.images.forEach((file) => {
-      formData.append('images', file)
+      formData.append('images', file, file.name)
     })
   }
 

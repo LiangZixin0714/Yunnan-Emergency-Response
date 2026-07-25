@@ -347,7 +347,7 @@ onMounted(async () => {
           </template>
         </el-alert>
 
-        <div class="incident-detail__images" v-if="authStore.roleName === 'RESOURCE_MANAGER' || authStore.roleName === 'OPERATOR' || imageList.length">
+        <div class="incident-detail__images" v-if="imageList.length">
           <h3>现场图片</h3>
           <div v-if="imageList.length" class="incident-detail__image-list">
             <el-image

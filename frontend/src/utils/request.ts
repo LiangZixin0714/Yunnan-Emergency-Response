@@ -6,7 +6,7 @@ import { getStoredToken, clearStoredToken } from '@/utils/token'
 
 const request: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 60000,
 })
 
 request.interceptors.request.use(
@@ -14,6 +14,9 @@ request.interceptors.request.use(
     const token = getStoredToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    if (config.data instanceof FormData) {
+      config.headers['Content-Type'] = undefined
     }
     return config
   },
@@ -26,7 +29,7 @@ request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse<unknown>>) => {
     const res = response.data
     if (res.code === 0) {
-      return res.data as unknown as AxiosResponse
+      return res.data as any
     }
     ElMessage.error(res.message || '请求失败')
     return Promise.reject(new Error(res.message || '请求失败'))

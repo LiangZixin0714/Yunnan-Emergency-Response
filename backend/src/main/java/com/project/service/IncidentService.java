@@ -1,5 +1,6 @@
 package com.project.service;
 
+import com.project.config.MinIOConfig;
 import com.project.dto.incident.IncidentReportRequest;
 import com.project.dto.incident.IncidentReportResponse;
 import com.project.dto.incident.IncidentRequest;
@@ -7,17 +8,14 @@ import com.project.dto.incident.IncidentResponse;
 import com.project.entity.mysql.Incident;
 import com.project.repository.mysql.IncidentRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -32,16 +30,24 @@ public class IncidentService {
     private static final Logger logger = LoggerFactory.getLogger(IncidentService.class);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final int MAX_IMAGES = 5;
+    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+    private static final String[] ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"};
+    private static final String[] ALLOWED_CONTENT_TYPES = {
+            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"
+    };
 
     private final IncidentRepository incidentRepository;
     private final ObjectMapper objectMapper;
+    private final MinioClient minioClient;
+    private final MinIOConfig minIOConfig;
 
-    @Value("${app.upload.dir:./uploads}")
-    private String uploadDir;
-
-    public IncidentService(IncidentRepository incidentRepository, ObjectMapper objectMapper) {
+    public IncidentService(IncidentRepository incidentRepository, ObjectMapper objectMapper,
+                          MinioClient minioClient, MinIOConfig minIOConfig) {
         this.incidentRepository = incidentRepository;
         this.objectMapper = objectMapper;
+        this.minioClient = minioClient;
+        this.minIOConfig = minIOConfig;
     }
 
     @Transactional("mysqlTransactionManager")
@@ -55,6 +61,8 @@ public class IncidentService {
         incident.setOccurTime(request.getOccurTime());
         incident.setLocation(request.getLocation());
         incident.setDescription(request.getDescription());
+        incident.setDeathCount(request.getDeathCount());
+        incident.setPropertyLoss(request.getPropertyLoss());
         incident.setStatus("pending");
         incident.setReporterId(reporterId);
 
@@ -83,29 +91,102 @@ public class IncidentService {
         return new IncidentReportResponse(incident.getIncidentId(), imageUrls);
     }
 
+    @Transactional("mysqlTransactionManager")
+    public Incident updateStatus(String incidentId, String status) {
+        Incident incident = incidentRepository.findByIncidentId(incidentId)
+                .orElseThrow(() -> new IllegalArgumentException("灾情不存在，incidentId: " + incidentId));
+
+        if ("completed".equals(status)) {
+            String disposalStatus = incident.getDisposalPlanStatus();
+            String resourceStatus = incident.getResourceDispatchStatus();
+            if (!"accepted".equals(disposalStatus)) {
+                throw new IllegalStateException(
+                        "无法结束灾情：处置方案尚未被接受（当前状态: " + disposalStatus + "）");
+            }
+            if (!"completed".equals(resourceStatus)) {
+                throw new IllegalStateException(
+                        "无法结束灾情：资源调度尚未完成（当前状态: " + resourceStatus + "）");
+            }
+        }
+
+        incident.setStatus(status);
+        return incidentRepository.save(incident);
+    }
+
+    @Transactional("mysqlTransactionManager")
+    public Incident completeResourceDispatch(String incidentId) {
+        Incident incident = incidentRepository.findByIncidentId(incidentId)
+                .orElseThrow(() -> new IllegalArgumentException("灾情不存在，incidentId: " + incidentId));
+        incident.setResourceDispatchStatus("completed");
+        return incidentRepository.save(incident);
+    }
+
     private String saveImage(MultipartFile file, String incidentId) {
         try {
-            String dateDir = LocalDateTime.now().format(DATE_FORMATTER);
-            Path uploadPath = Paths.get(uploadDir, dateDir);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-
             String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+            if (originalFilename == null || originalFilename.isEmpty()) {
+                logger.warn("File has no name, skipping");
+                return null;
             }
-            String newFilename = incidentId + "_" + UUID.randomUUID().toString().substring(0, 8) + extension;
-            Path filePath = uploadPath.resolve(newFilename);
 
-            Files.copy(file.getInputStream(), filePath);
-            String url = "/api/image/" + dateDir + "/" + newFilename;
-            logger.info("Image saved: {}", url);
+            if (file.getSize() > MAX_FILE_SIZE) {
+                logger.warn("File size exceeds limit: {} > {} bytes", file.getSize(), MAX_FILE_SIZE);
+                throw new IllegalArgumentException("图片大小不能超过10MB");
+            }
+
+            String extension = "";
+            if (originalFilename.contains(".")) {
+                extension = originalFilename.substring(originalFilename.lastIndexOf(".")).toLowerCase();
+            }
+
+            boolean validExtension = false;
+            for (String ext : ALLOWED_EXTENSIONS) {
+                if (ext.equalsIgnoreCase(extension)) {
+                    validExtension = true;
+                    break;
+                }
+            }
+            if (!validExtension) {
+                logger.warn("Invalid file extension: {}", extension);
+                throw new IllegalArgumentException("不支持的图片格式，仅支持jpg/jpeg/png/gif/webp");
+            }
+
+            String contentType = file.getContentType();
+            if (contentType != null) {
+                boolean validContentType = false;
+                for (String ct : ALLOWED_CONTENT_TYPES) {
+                    if (ct.equalsIgnoreCase(contentType)) {
+                        validContentType = true;
+                        break;
+                    }
+                }
+                if (!validContentType) {
+                    logger.warn("Invalid content type: {}", contentType);
+                    throw new IllegalArgumentException("图片类型不匹配，请上传有效图片文件");
+                }
+            }
+
+            String dateDir = LocalDateTime.now().format(DATE_FORMATTER);
+            String newFilename = incidentId + "_" + UUID.randomUUID().toString().substring(0, 8) + extension;
+            String objectKey = dateDir + "/" + newFilename;
+
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(minIOConfig.getBucket())
+                            .object(objectKey)
+                            .stream(file.getInputStream(), file.getSize(), -1)
+                            .contentType(contentType != null ? contentType : "image/jpeg")
+                            .build()
+            );
+
+            String url = "/api/image/" + objectKey;
+            logger.info("Image saved to MinIO: {}", url);
             return url;
-        } catch (IOException e) {
-            logger.error("Failed to save image", e);
-            return null;
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.error("Failed to save image to MinIO", e);
+            throw new RuntimeException("图片上传失败", e);
         }
     }
 

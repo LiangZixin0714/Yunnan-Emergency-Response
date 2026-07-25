@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,6 +39,7 @@ public class ResourceController {
     }
 
     @PostMapping("/lock")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
     public ResponseEntity<Result<Map<String, Object>>> lockResource(
             @Valid @RequestBody LockResourceRequest request) {
         Map<String, Object> result = resourceService.lockResource(
@@ -51,11 +53,26 @@ public class ResourceController {
     }
 
     @PostMapping("/release")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
     public ResponseEntity<Result<Map<String, Object>>> releaseResource(
             @Valid @RequestBody ReleaseResourceRequest request) {
         Map<String, Object> result = resourceService.releaseResource(
                 request.getResourceId(),
                 request.getQuantity(),
+                request.getRemark()
+        );
+        return ResponseEntity.ok(Result.success(result));
+    }
+
+    @PostMapping("/allocate")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
+    public ResponseEntity<Result<Map<String, Object>>> allocateResource(
+            @Valid @RequestBody AllocateResourceRequest request) {
+        Map<String, Object> result = resourceService.allocateResource(
+                request.getResourceId(),
+                request.getQuantity(),
+                request.getIncidentId(),
+                request.getPlanId(),
                 request.getRemark()
         );
         return ResponseEntity.ok(Result.success(result));
@@ -70,6 +87,60 @@ public class ResourceController {
     }
 
     public static class LockResourceRequest {
+        @NotBlank(message = "resourceId不能为空")
+        private String resourceId;
+
+        @Positive(message = "数量必须大于0")
+        private Integer quantity;
+
+        private String incidentId;
+
+        private String planId;
+
+        private String remark;
+
+        public String getResourceId() {
+            return resourceId;
+        }
+
+        public void setResourceId(String resourceId) {
+            this.resourceId = resourceId;
+        }
+
+        public Integer getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(Integer quantity) {
+            this.quantity = quantity;
+        }
+
+        public String getIncidentId() {
+            return incidentId;
+        }
+
+        public void setIncidentId(String incidentId) {
+            this.incidentId = incidentId;
+        }
+
+        public String getPlanId() {
+            return planId;
+        }
+
+        public void setPlanId(String planId) {
+            this.planId = planId;
+        }
+
+        public String getRemark() {
+            return remark;
+        }
+
+        public void setRemark(String remark) {
+            this.remark = remark;
+        }
+    }
+
+    public static class AllocateResourceRequest {
         @NotBlank(message = "resourceId不能为空")
         private String resourceId;
 

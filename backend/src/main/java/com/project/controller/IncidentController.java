@@ -60,4 +60,12 @@ public class IncidentController {
         IncidentResponse response = incidentService.submitIncident(request, reporterId);
         return ResponseEntity.ok(Result.success("success", response));
     }
+
+    @PostMapping("/update-status")
+    public ResponseEntity<Result<com.project.entity.mysql.Incident>> updateStatus(
+            @RequestParam String incidentId,
+            @RequestParam String status) {
+        com.project.entity.mysql.Incident incident = incidentService.updateStatus(incidentId, status);
+        return ResponseEntity.ok(Result.success(incident));
+    }
 }

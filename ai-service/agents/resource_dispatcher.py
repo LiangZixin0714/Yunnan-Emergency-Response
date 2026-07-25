@@ -19,18 +19,18 @@ MYSQL_HOST = os.environ.get("MYSQL_HOST", "localhost")
 MYSQL_PORT = int(os.environ.get("MYSQL_PORT", "3306"))
 MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE", "emergency_db")
 MYSQL_USER = os.environ.get("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "Llabb888")
+MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "ZAQ12wsx581!")
 
 # 灾害类型与资源类型映射（根据 db-schema.md 数据字典）
 DISASTER_RESOURCE_MAP = {
-    "地震": ["设备", "人员", "物资"],
-    "滑坡": ["设备", "人员", "物资"],
-    "洪涝": ["设备", "人员", "物资"],
-    "干旱": ["设备", "人员", "物资"],
-    "森林火灾": ["设备", "人员", "物资"],
-    "泥石流": ["设备", "人员", "物资"],
-    "火灾": ["设备", "人员", "物资"],
-    "台风": ["设备", "人员", "物资"],
+    "地震": ["设备", "人员", "物资", "医疗", "生活"],
+    "滑坡": ["设备", "人员", "物资", "医疗", "生活"],
+    "洪涝": ["设备", "人员", "物资", "医疗", "生活"],
+    "干旱": ["设备", "人员", "物资", "医疗", "生活"],
+    "森林火灾": ["设备", "人员", "物资", "医疗"],
+    "泥石流": ["设备", "人员", "物资", "医疗", "生活"],
+    "火灾": ["设备", "人员", "物资", "医疗"],
+    "台风": ["设备", "人员", "物资", "医疗", "生活"],
 }
 
 
@@ -202,7 +202,7 @@ def dispatch_resources(info: Dict[str, Any]) -> List[Dict[str, Any]]:
     
     try:
         # 1. 尝试从 MySQL 数据库查询资源
-        db_resources = _query_resources_by_disaster(disaster_type, limit=5)
+        db_resources = _query_resources_by_disaster(disaster_type, limit=15)
         
         if db_resources:
             logger.info(f"✅ 资源调度完成，从数据库获取 {len(db_resources)} 条资源")

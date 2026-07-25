@@ -99,6 +99,21 @@ function getActionLabel(row: { resourceDispatchStatus: string | null; disposalPl
   return '查看'
 }
 
+function getImageList(imageUrls: string | null): string[] {
+  if (!imageUrls) return []
+  try {
+    const parsed = JSON.parse(imageUrls)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function getFirstImage(imageUrls: string | null): string | null {
+  const list = getImageList(imageUrls)
+  return list.length > 0 ? list[0] : null
+}
+
 onMounted(() => {
   loadData()
 })
@@ -138,6 +153,19 @@ onMounted(() => {
 
     <el-card shadow="hover">
       <el-table :data="incidentStore.incidentList" v-loading="incidentStore.loading" stripe>
+        <el-table-column label="现场图片" width="80">
+          <template #default="{ row }">
+            <div v-if="getFirstImage(row.imageUrls)" class="incident-list__image-wrapper">
+              <el-image
+                :src="getFirstImage(row.imageUrls)!"
+                fit="cover"
+                class="incident-list__image"
+                :preview-src-list="getImageList(row.imageUrls)"
+              />
+            </div>
+            <span v-else class="incident-list__no-image">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="incidentName" label="事件名称" min-width="160" />
         <el-table-column prop="disasterType" label="灾害类型" width="120">
           <template #default="{ row }">
@@ -208,5 +236,23 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: var(--spacing-md);
+}
+
+.incident-list__image-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--color-border-light);
+}
+
+.incident-list__image {
+  width: 100%;
+  height: 100%;
+}
+
+.incident-list__no-image {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 </style>

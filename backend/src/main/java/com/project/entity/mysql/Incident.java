@@ -39,11 +39,23 @@ public class Incident {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Column(name = "disposal_plan_status", length = 20)
+    private String disposalPlanStatus;
+
+    @Column(name = "resource_dispatch_status", length = 20)
+    private String resourceDispatchStatus;
+
     @Column(name = "image_urls", columnDefinition = "TEXT")
     private String imageUrls;
 
     @Column(name = "reporter_id")
     private Long reporterId;
+
+    @Column(name = "death_count")
+    private Integer deathCount;
+
+    @Column(name = "property_loss")
+    private Double propertyLoss;
 
     @Column(name = "report_time")
     private LocalDateTime reportTime;
@@ -151,6 +163,22 @@ public class Incident {
         this.status = status;
     }
 
+    public String getDisposalPlanStatus() {
+        return disposalPlanStatus;
+    }
+
+    public void setDisposalPlanStatus(String disposalPlanStatus) {
+        this.disposalPlanStatus = disposalPlanStatus;
+    }
+
+    public String getResourceDispatchStatus() {
+        return resourceDispatchStatus;
+    }
+
+    public void setResourceDispatchStatus(String resourceDispatchStatus) {
+        this.resourceDispatchStatus = resourceDispatchStatus;
+    }
+
     public String getImageUrls() {
         return imageUrls;
     }
@@ -165,6 +193,22 @@ public class Incident {
 
     public void setReporterId(Long reporterId) {
         this.reporterId = reporterId;
+    }
+
+    public Integer getDeathCount() {
+        return deathCount;
+    }
+
+    public void setDeathCount(Integer deathCount) {
+        this.deathCount = deathCount;
+    }
+
+    public Double getPropertyLoss() {
+        return propertyLoss;
+    }
+
+    public void setPropertyLoss(Double propertyLoss) {
+        this.propertyLoss = propertyLoss;
     }
 
     public LocalDateTime getReportTime() {

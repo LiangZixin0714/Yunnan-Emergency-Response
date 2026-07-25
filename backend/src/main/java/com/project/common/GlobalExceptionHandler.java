@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
             String errorMessage = error.getDefaultMessage();
             errors.put(fieldName, errorMessage);
         });
-        return ResponseEntity.badRequest().body(Result.error(400, "参数校验失败"));
+        return ResponseEntity.badRequest().body(Result.badRequest("参数校验失败", errors));
     }
 
     @ExceptionHandler(BadCredentialsException.class)

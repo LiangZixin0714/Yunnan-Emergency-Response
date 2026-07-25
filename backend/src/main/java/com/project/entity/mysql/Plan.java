@@ -30,6 +30,15 @@ public class Plan {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Column(name = "submitted_by")
+    private Long submittedBy;
+
+    @Column(name = "submitted_at")
+    private LocalDateTime submittedAt;
+
+    @Column(name = "reject_reason", columnDefinition = "TEXT")
+    private String rejectReason;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -107,6 +116,30 @@ public class Plan {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public Long getSubmittedBy() {
+        return submittedBy;
+    }
+
+    public void setSubmittedBy(Long submittedBy) {
+        this.submittedBy = submittedBy;
+    }
+
+    public LocalDateTime getSubmittedAt() {
+        return submittedAt;
+    }
+
+    public void setSubmittedAt(LocalDateTime submittedAt) {
+        this.submittedAt = submittedAt;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
+    public void setRejectReason(String rejectReason) {
+        this.rejectReason = rejectReason;
     }
 
     public LocalDateTime getCreatedAt() {

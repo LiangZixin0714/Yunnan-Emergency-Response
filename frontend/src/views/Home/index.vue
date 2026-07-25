@@ -6,12 +6,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import StatCard from '@/components/StatCard.vue'
 import { getDashboardOverview, getDashboardTrend, getDashboardDistribution } from '@/api/dashboard'
 import type { DashboardOverview, DashboardTrend, DashboardDistribution } from '@/types/dashboard'
-import * as echarts from 'echarts/core'
-import { LineChart, PieChart } from 'echarts/charts'
-import { TitleComponent, TooltipComponent, LegendComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-
-echarts.use([LineChart, PieChart, TitleComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+import * as echarts from 'echarts'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -61,15 +56,17 @@ async function loadCharts(): Promise<void> {
     chartsReady.value = true
     await nextTick()
     if (disposed) return
+    await new Promise(resolve => setTimeout(resolve, 100))
+    if (disposed) return
     if (trendChartRef.value) {
       trendChart = echarts.init(trendChartRef.value)
       trendChart.setOption({
         title: { text: '灾情趋势', left: 'center', textStyle: { fontSize: 16 } },
         tooltip: { trigger: 'axis' },
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: trendRes.dates, boundaryGap: false },
+        xAxis: { type: 'category', data: trendRes?.dates || [], boundaryGap: false },
         yAxis: { type: 'value', minInterval: 1 },
-        series: [{ name: '事件数', type: 'line', data: trendRes.counts, smooth: true, areaStyle: { opacity: 0.15 }, itemStyle: { color: '#1a73e8' } }],
+        series: [{ name: '事件数', type: 'line', data: trendRes?.counts || [], smooth: true, areaStyle: { opacity: 0.15 }, itemStyle: { color: '#1a73e8' } }],
       })
     }
     if (distChartRef.value) {
@@ -78,10 +75,11 @@ async function loadCharts(): Promise<void> {
         title: { text: '灾害类型分布', left: 'center', textStyle: { fontSize: 16 } },
         tooltip: { trigger: 'item' },
         legend: { orient: 'vertical', left: 'left', top: 'middle' },
-        series: [{ type: 'pie', radius: ['40%', '70%'], center: ['55%', '55%'], data: distRes.types.map((t, i) => ({ name: t, value: distRes.counts[i] })), emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.5)' } } }],
+        series: [{ type: 'pie', radius: ['40%', '70%'], center: ['55%', '55%'], data: distRes?.types?.map((t, i) => ({ name: t, value: distRes.counts[i] })) || [], emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.5)' } } }],
       })
     }
-  } catch {
+  } catch (e) {
+    console.error('Chart load error:', e)
     chartError.value = true
     chartLoading.value = false
   }
@@ -137,12 +135,12 @@ onBeforeUnmount(() => {
 
     <div class="home-page__charts">
       <el-card shadow="hover" class="home-page__chart-card">
-        <div v-if="chartsReady" ref="trendChartRef" class="home-page__chart" />
+        <div v-if="chartsReady" ref="trendChartRef" class="home-page__chart" style="width: 100%; height: 340px;" />
         <div v-else-if="chartError" class="home-page__empty">暂无数据</div>
         <el-skeleton v-else :rows="8" />
       </el-card>
       <el-card shadow="hover" class="home-page__chart-card">
-        <div v-if="chartsReady" ref="distChartRef" class="home-page__chart" />
+        <div v-if="chartsReady" ref="distChartRef" class="home-page__chart" style="width: 100%; height: 340px;" />
         <div v-else-if="chartError" class="home-page__empty">暂无数据</div>
         <el-skeleton v-else :rows="8" />
       </el-card>

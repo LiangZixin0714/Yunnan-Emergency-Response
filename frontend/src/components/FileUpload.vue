@@ -30,10 +30,14 @@ function syncPreviewUrls(): void {
 watch(() => props.modelValue, syncPreviewUrls, { immediate: true })
 
 function handleBeforeUpload(file: File): boolean {
-  if (props.imageMode && !ALLOWED_IMAGE_TYPES.includes(file.type as typeof ALLOWED_IMAGE_TYPES[number])) {
-    ElMessage.warning('仅支持jpg/jpeg/png/gif/webp格式图片')
-    emit('upload-error', '仅支持jpg/jpeg/png/gif/webp格式图片')
-    return false
+  if (props.imageMode) {
+    const isImage = ALLOWED_IMAGE_TYPES.includes(file.type as typeof ALLOWED_IMAGE_TYPES[number]) || 
+                    /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name)
+    if (!isImage) {
+      ElMessage.warning('仅支持jpg/jpeg/png/gif/webp格式图片')
+      emit('upload-error', '仅支持jpg/jpeg/png/gif/webp格式图片')
+      return false
+    }
   }
   if (file.size > props.maxSize) {
     const msg = props.imageMode ? '图片大小不能超过10MB' : '文件大小不能超过10MB'
@@ -72,6 +76,8 @@ onUnmounted(() => {
       :show-file-list="false"
       :accept="accept"
       :before-upload="handleBeforeUpload"
+      multiple
+      name="images"
     >
       <el-button type="primary" plain>
         <el-icon><Upload /></el-icon>
