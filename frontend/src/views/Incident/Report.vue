@@ -2,6 +2,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useIncidentStore } from '@/stores/incident'
+import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { DisasterTypeLabel, IncidentLevelLabel, IMAGE_ACCEPT_STRING } from '@/types/enums'
@@ -10,6 +11,7 @@ import FileUpload from '@/components/FileUpload.vue'
 
 const router = useRouter()
 const incidentStore = useIncidentStore()
+const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const files = ref<File[]>([])
@@ -32,6 +34,8 @@ const rules: FormRules = {
   occurTime: [{ required: true, message: '请选择发生时间', trigger: 'change' }],
   location: [{ required: true, message: '请输入发生地点', trigger: 'blur' }],
   description: [{ required: true, message: '请输入事件描述', trigger: 'blur' }],
+  deathCount: [{ required: true, message: '请输入死亡人数', trigger: 'blur' }],
+  propertyLoss: [{ required: true, message: '请输入财产损失', trigger: 'blur' }],
 }
 
 const disasterOptions = Object.entries(DisasterTypeLabel).map(([value, label]) => ({
@@ -69,6 +73,7 @@ async function handleSubmit(): Promise<void> {
       description: form.description,
       deathCount: form.deathCount ?? undefined,
       propertyLoss: form.propertyLoss ?? undefined,
+      reporterName: authStore.username || '',
       images: files.value,
     })
     ElMessage.success('灾情上报成功')
@@ -144,12 +149,12 @@ async function handleSubmit(): Promise<void> {
           />
         </el-form-item>
 
-        <el-form-item label="死亡人数">
-          <el-input-number v-model="form.deathCount" :min="0" :step="1" :precision="0" placeholder="选填" />
+        <el-form-item label="死亡人数" prop="deathCount">
+          <el-input-number v-model="form.deathCount" :min="0" :step="1" :precision="0" placeholder="请输入死亡人数" />
         </el-form-item>
 
-        <el-form-item label="财产损失/万元">
-          <el-input-number v-model="form.propertyLoss" :min="0" :step="0.01" :precision="2" placeholder="选填" />
+        <el-form-item label="财产损失/万元" prop="propertyLoss">
+          <el-input-number v-model="form.propertyLoss" :min="0" :step="0.01" :precision="2" placeholder="请输入财产损失" />
         </el-form-item>
 
         <el-form-item label="现场图片">

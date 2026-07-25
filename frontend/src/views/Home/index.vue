@@ -1,119 +1,94 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { ref, computed, onMounted } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
-import StatCard from '@/components/StatCard.vue'
-import { getDashboardOverview, getDashboardTrend, getDashboardDistribution } from '@/api/dashboard'
-import type { DashboardOverview, DashboardTrend, DashboardDistribution } from '@/types/dashboard'
-import * as echarts from 'echarts/core'
-import { LineChart, PieChart } from 'echarts/charts'
-import { TitleComponent, TooltipComponent, LegendComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
+import StatisticCard from '@/components/StatisticCard.vue'
+import DisasterMap from '@/components/DisasterMap.vue'
+import TrendChart from '@/components/TrendChart.vue'
+import DisasterTypeChart from '@/components/DisasterTypeChart.vue'
+import { getIncidentList } from '@/api/incident'
+import type { Incident, IncidentListResult } from '@/types/incident'
+import type { DashboardTrend, MapIncident } from '@/types/dashboard'
+import { DisasterTypeLabel } from '@/types/enums'
+import type { DisasterTypeValue } from '@/types/enums'
 
-echarts.use([LineChart, PieChart, TitleComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+const incidentList = ref<Incident[]>([])
+const loading = ref(true)
+const error = ref(false)
 
-const router = useRouter()
-const authStore = useAuthStore()
+const todayCount = computed(() => {
+  const todayStr = new Date().toISOString().slice(0, 10)
+  return incidentList.value.filter(
+    (i) => i.occurTime != null && i.occurTime.slice(0, 10) === todayStr
+  ).length
+})
 
-const overview = ref<DashboardOverview | null>(null)
-const overviewLoading = ref(true)
-const chartLoading = ref(true)
-const overviewError = ref(false)
-const chartError = ref(false)
-const chartsReady = ref(false)
+const activeCount = computed(() => {
+  return incidentList.value.filter((i) => i.status === 'processing').length
+})
 
-const trendChartRef = ref<HTMLDivElement>()
-const distChartRef = ref<HTMLDivElement>()
-let trendChart: echarts.ECharts | null = null
-let distChart: echarts.ECharts | null = null
-let disposed = false
-
-function handleResize(): void {
-  if (!disposed) {
-    trendChart?.resize()
-    distChart?.resize()
+const trendData = computed<DashboardTrend>(() => {
+  const dates: string[] = []
+  const counts: number[] = []
+  for (let offset = 6; offset >= 0; offset--) {
+    const d = new Date()
+    d.setDate(d.getDate() - offset)
+    const ds = d.toISOString().slice(0, 10)
+    dates.push(`${d.getMonth() + 1}/${d.getDate()}`)
+    counts.push(
+      incidentList.value.filter((i) => i.occurTime != null && i.occurTime.slice(0, 10) === ds).length
+    )
   }
-}
+  return { dates, counts }
+})
 
-async function loadOverview(): Promise<void> {
-  overviewLoading.value = true
-  overviewError.value = false
+const typeDistributionData = computed(() => {
+  const typeKeys: DisasterTypeValue[] = ['earthquake', 'mudslide', 'flood', 'drought', 'landslide', 'fire', 'other']
+  return typeKeys
+    .map((key) => ({
+      name: DisasterTypeLabel[key],
+      value: incidentList.value.filter((i) => i.disasterType === key).length,
+    }))
+    .filter((item) => item.value > 0)
+})
+
+const mapIncidents = computed<MapIncident[]>(() => {
+  return incidentList.value
+    .filter((i) => {
+      if (i.latitude == null || i.longitude == null) return false
+      return i.latitude >= 21 && i.latitude <= 29 && i.longitude >= 97 && i.longitude <= 106
+    })
+    .map((i) => ({
+      incidentId: i.incidentId,
+      incidentName: i.incidentName,
+      disasterType: i.disasterType,
+      incidentLevel: i.incidentLevel,
+      status: i.status,
+      latitude: i.latitude!,
+      longitude: i.longitude!,
+      occurTime: i.occurTime ?? '',
+      affectedCount: i.affectedCount ?? i.deathCount ?? 0,
+    }))
+})
+
+async function loadIncidentList(): Promise<void> {
+  loading.value = true
+  error.value = false
   try {
-    const res = await getDashboardOverview() as unknown as DashboardOverview
-    overview.value = res
+    const res = await getIncidentList({ page: 1, size: 999 }) as unknown as IncidentListResult
+    incidentList.value = res.list ?? []
   } catch {
-    overviewError.value = true
+    error.value = true
   } finally {
-    overviewLoading.value = false
-  }
-}
-
-async function loadCharts(): Promise<void> {
-  chartLoading.value = true
-  chartError.value = false
-  try {
-    const [trendRes, distRes] = await Promise.all([
-      getDashboardTrend() as unknown as DashboardTrend,
-      getDashboardDistribution() as unknown as DashboardDistribution,
-    ])
-    chartLoading.value = false
-    chartsReady.value = true
-    await nextTick()
-    if (disposed) return
-    if (trendChartRef.value) {
-      trendChart = echarts.init(trendChartRef.value)
-      trendChart.setOption({
-        title: { text: '灾情趋势', left: 'center', textStyle: { fontSize: 16 } },
-        tooltip: { trigger: 'axis' },
-        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: trendRes.dates, boundaryGap: false },
-        yAxis: { type: 'value', minInterval: 1 },
-        series: [{ name: '事件数', type: 'line', data: trendRes.counts, smooth: true, areaStyle: { opacity: 0.15 }, itemStyle: { color: '#1a73e8' } }],
-      })
-    }
-    if (distChartRef.value) {
-      distChart = echarts.init(distChartRef.value)
-      distChart.setOption({
-        title: { text: '灾害类型分布', left: 'center', textStyle: { fontSize: 16 } },
-        tooltip: { trigger: 'item' },
-        legend: { orient: 'vertical', left: 'left', top: 'middle' },
-        series: [{ type: 'pie', radius: ['40%', '70%'], center: ['55%', '55%'], data: distRes.types.map((t, i) => ({ name: t, value: distRes.counts[i] })), emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.5)' } } }],
-      })
-    }
-  } catch {
-    chartError.value = true
-    chartLoading.value = false
+    loading.value = false
   }
 }
 
 function refreshAll(): void {
-  loadOverview()
-  loadCharts()
+  loadIncidentList()
 }
-
-const allQuickEntries = [
-  { title: '灾情上报', icon: 'EditPen', path: '/incident/report', color: '#f56c6c', roles: ['VIEWER'] },
-  { title: '事件列表', icon: 'List', path: '/incident/list', color: '#e6a23c' },
-  { title: '资源调度', icon: 'Box', path: '/resource', color: '#67c23a', roles: ['ADMIN', 'RESOURCE_MANAGER'] },
-  { title: 'AI方案生成', icon: 'Document', path: '/plan', color: '#409eff', roles: ['ADMIN', 'OPERATOR'] },
-]
-
-const quickEntries = computed(() => {
-  const role = authStore.roleName
-  return allQuickEntries.filter((e) => !e.roles || (role && e.roles.includes(role)))
-})
 
 onMounted(() => {
   refreshAll()
-  window.addEventListener('resize', handleResize)
-})
-
-onBeforeUnmount(() => {
-  disposed = true
-  window.removeEventListener('resize', handleResize)
-  if (trendChart) { try { trendChart.dispose() } catch {} trendChart = null }
-  if (distChart) { try { distChart.dispose() } catch {} distChart = null }
 })
 </script>
 
@@ -125,51 +100,61 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="home-page__stats">
-      <StatCard title="今日新增事件" :value="overview?.todayCount ?? '--'" icon="Warning" :loading="overviewLoading" />
-      <StatCard title="进行中事件" :value="overview?.activeCount ?? '--'" icon="Loading" :loading="overviewLoading" />
-      <StatCard title="已结束事件" :value="overview?.completedCount ?? '--'" icon="CircleCheck" :loading="overviewLoading" />
+      <StatisticCard title="今日灾害数量" :value="todayCount" unit="起" icon="Warning" :loading="loading" :error="error" @retry="loadIncidentList" />
+      <StatisticCard title="待处理事件" :value="activeCount" unit="起" icon="Loading" :loading="loading" :error="error" @retry="loadIncidentList" />
     </div>
 
-    <div v-if="overviewError" class="home-page__error">
-      <span>数据加载失败</span>
-      <el-button size="small" @click="loadOverview">重试</el-button>
-    </div>
+    <el-card shadow="hover" class="home-page__map-card">
+      <DisasterMap :incidents="mapIncidents" :loading="loading" :error="error" @retry="loadIncidentList" />
+    </el-card>
 
-    <div class="home-page__charts">
-      <el-card shadow="hover" class="home-page__chart-card">
-        <div v-if="chartsReady" ref="trendChartRef" class="home-page__chart" />
-        <div v-else-if="chartError" class="home-page__empty">暂无数据</div>
-        <el-skeleton v-else :rows="8" />
-      </el-card>
-      <el-card shadow="hover" class="home-page__chart-card">
-        <div v-if="chartsReady" ref="distChartRef" class="home-page__chart" />
-        <div v-else-if="chartError" class="home-page__empty">暂无数据</div>
-        <el-skeleton v-else :rows="8" />
-      </el-card>
-    </div>
-
-    <div class="home-page__quick">
-      <h3 class="home-page__section-title">快捷入口</h3>
-      <div class="home-page__entries">
-        <el-card v-for="entry in quickEntries" :key="entry.path" shadow="hover" class="home-page__entry" @click="router.push(entry.path)">
-          <el-icon :size="36" :color="entry.color"><component :is="entry.icon" /></el-icon>
-          <span class="home-page__entry-title">{{ entry.title }}</span>
+    <el-row :gutter="20" class="home-page__bottom-row">
+      <el-col :span="12">
+        <el-card shadow="hover" class="home-page__chart-card">
+          <TrendChart :trend-data="trendData" :loading="loading" :error="error" @retry="loadIncidentList" />
         </el-card>
-      </div>
-    </div>
+      </el-col>
+      <el-col :span="12">
+        <el-card shadow="hover" class="home-page__chart-card">
+          <DisasterTypeChart :type-distribution-data="typeDistributionData" :loading="loading" :error="error" @retry="loadIncidentList" />
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <style scoped>
-.home-page__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-lg); margin-bottom: var(--spacing-lg); }
-.home-page__charts { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-lg); margin-bottom: var(--spacing-lg); }
-.home-page__chart-card { min-height: 380px; }
-.home-page__chart { width: 100%; height: 340px; }
-.home-page__error { display: flex; align-items: center; gap: var(--spacing-sm); color: var(--color-danger); margin-bottom: var(--spacing-lg); }
-.home-page__empty { display: flex; align-items: center; justify-content: center; height: 300px; color: var(--color-text-secondary); font-size: var(--font-size-lg); }
-.home-page__section-title { font-size: var(--font-size-lg); margin-bottom: var(--spacing-md); }
-.home-page__entries { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-md); }
-.home-page__entry { cursor: pointer; text-align: center; transition: transform var(--transition-duration); }
-.home-page__entry:hover { transform: translateY(-4px); }
-.home-page__entry-title { display: block; margin-top: var(--spacing-sm); font-size: var(--font-size-base); color: var(--color-text-regular); }
+.home-page__stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+.home-page__map-card {
+  margin-bottom: var(--spacing-lg);
+  height: 600px;
+}
+.home-page__map-card :deep(.el-card__body) {
+  height: 100%;
+  padding: 8px;
+}
+.home-page__bottom-row {
+  margin-bottom: var(--spacing-lg);
+}
+.home-page__chart-card {
+  height: 380px;
+}
+.home-page__chart-card :deep(.el-card__body) {
+  height: 100%;
+  padding: 12px;
+}
+@media (max-width: 768px) {
+  .home-page__stats {
+    grid-template-columns: 1fr;
+  }
+  .home-page__bottom-row .el-col {
+    max-width: 100%;
+    flex: 0 0 100%;
+  }
+}
 </style>

@@ -12,9 +12,13 @@ export interface Incident {
   status: IncidentStatusValue
   imageUrls: string | null
   reporterId: number | null
+  reporterName?: string
   reportTime: string | null
   deathCount: number | null
+  affectedCount?: number
   propertyLoss: number | null
+  latitude: number | null
+  longitude: number | null
   disposalPlanStatus: DisposalPlanStatusValue | null
   resourceDispatchStatus: DispatchOrderStatusValue | null
   createdAt: string
@@ -30,6 +34,7 @@ export interface IncidentReportData {
   description?: string
   deathCount?: number
   propertyLoss?: number
+  reporterName?: string
   images?: File[]
 }
 

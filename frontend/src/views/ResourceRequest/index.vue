@@ -85,7 +85,7 @@ async function handleSubmitRequest(): Promise<void> {
     }))
     await submitResourceRequest({ incidentId, items })
     ElMessage.success('资源申请已提交，等待系统管理员处理')
-    router.back()
+    router.replace(`/incident/${incidentId}`)
   } catch {
     ElMessage.error('资源申请提交失败，请重试')
   } finally {

@@ -13,6 +13,8 @@ interface MapIncident {
   status: IncidentStatusValue
   latitude: number
   longitude: number
+  occurTime?: string
+  affectedCount?: number
 }
 
 const props = withDefaults(defineProps<{

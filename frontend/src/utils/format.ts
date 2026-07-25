@@ -1,5 +1,5 @@
 export function formatDate(date: string | Date, format: string = 'YYYY-MM-DD HH:mm:ss'): string {
-  const d = typeof date === 'string' ? new Date(date) : date
+  const d = typeof date === 'string' ? new Date(date.replace(' ', 'T')) : date
   const year = d.getFullYear().toString()
   const month = (d.getMonth() + 1).toString().padStart(2, '0')
   const day = d.getDate().toString().padStart(2, '0')
