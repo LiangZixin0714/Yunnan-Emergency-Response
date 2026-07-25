@@ -85,15 +85,15 @@ function resetFilters(): void {
 
 
 function handleAction(row: { incidentId: string; resourceDispatchStatus: string | null; disposalPlanStatus: string | null; status: string }): void {
-  if (authStore.roleName === 'ADMIN' && row.resourceDispatchStatus === 'shortage') {
+  if (authStore.roleName === 'ADMIN' && row.status === 'processing' && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'resubmitted') && row.resourceDispatchStatus === 'shortage') {
     router.push(`/incident/${row.incidentId}?mode=shortage`)
   } else {
     router.push(`/incident/${row.incidentId}`)
   }
 }
 
-function getActionLabel(row: { resourceDispatchStatus: string | null; disposalPlanStatus: string | null }): string {
-  if (authStore.roleName === 'ADMIN' && row.resourceDispatchStatus === 'shortage') {
+function getActionLabel(row: { resourceDispatchStatus: string | null; disposalPlanStatus: string | null; status: string }): string {
+  if (authStore.roleName === 'ADMIN' && row.status === 'processing' && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'resubmitted') && row.resourceDispatchStatus === 'shortage') {
     return '资源调度'
   }
   return '查看'
@@ -190,7 +190,7 @@ onMounted(() => {
           width="130"
         >
           <template #default="{ row }">
-            <StatusTag v-if="row.disposalPlanStatus && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'rejected' || row.disposalPlanStatus === 'accepted')" :status="row.disposalPlanStatus" :status-map="disposalPlanStatusMap" />
+            <StatusTag v-if="row.disposalPlanStatus && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'rejected' || row.disposalPlanStatus === 'accepted' || row.disposalPlanStatus === 'resubmitted')" :status="row.disposalPlanStatus" :status-map="disposalPlanStatusMap" />
             <span v-else>-</span>
           </template>
         </el-table-column>

@@ -166,6 +166,7 @@ export const DisposalPlanStatus = {
   SUBMITTED: 'submitted',
   ACCEPTED: 'accepted',
   REJECTED: 'rejected',
+  RESUBMITTED: 'resubmitted',
 } as const
 
 export type DisposalPlanStatusValue = (typeof DisposalPlanStatus)[keyof typeof DisposalPlanStatus]
@@ -175,6 +176,7 @@ export const DisposalPlanStatusLabel: Record<DisposalPlanStatusValue, string> = 
   submitted: '已提交',
   accepted: '已接受',
   rejected: '已驳回',
+  resubmitted: '重新提交',
 }
 
 export const DisposalPlanStatusTagType: Record<DisposalPlanStatusValue, string> = {
@@ -182,6 +184,7 @@ export const DisposalPlanStatusTagType: Record<DisposalPlanStatusValue, string> 
   submitted: 'warning',
   accepted: 'success',
   rejected: 'danger',
+  resubmitted: 'warning',
 }
 
 export const ResourceDispatchStatus = {
@@ -225,4 +228,11 @@ export const ApplicationStatusTagType: Record<ApplicationStatusValue, string> = 
   approved: 'success',
   received: 'info',
   rejected: 'danger',
+}
+
+export const RiskLevelColorMap: Record<IncidentLevelValue, string> = {
+  IV: '#409EFF',
+  III: '#E6A23C',
+  II: '#F56C6C',
+  I: '#CC0000',
 }

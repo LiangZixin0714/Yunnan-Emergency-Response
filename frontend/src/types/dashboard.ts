@@ -26,6 +26,8 @@ export interface MapIncident {
   status: IncidentStatusValue
   latitude: number
   longitude: number
+  occurTime: string
+  affectedCount: number
 }
 
 export interface ScreenData {

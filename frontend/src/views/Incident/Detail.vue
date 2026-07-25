@@ -46,7 +46,10 @@ const disposalPlanStatusMap = Object.fromEntries(
 )
 
 const incidentId = route.params.id as string
-const isShortageMode = computed(() => route.query.mode === 'shortage' && authStore.roleName === 'ADMIN')
+const isShortageMode = computed(() => {
+  const inc = incidentStore.currentIncident
+  return route.query.mode === 'shortage' && authStore.roleName === 'ADMIN' && inc?.status === 'processing' && (inc?.disposalPlanStatus === 'submitted' || inc?.disposalPlanStatus === 'resubmitted') && inc?.resourceDispatchStatus === 'shortage'
+})
 
 const searchItems = ref<SearchItem[]>([{ id: 1, selectedResourceId: '', increaseQuantity: 0 }])
 let searchItemIdCounter = 1
@@ -67,19 +70,23 @@ const canDispatchResource = computed(() => {
   const role = authStore.roleName
   const status = incidentStore.currentIncident?.status
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return role === 'RESOURCE_MANAGER' && status !== 'completed' && dpStatus === 'submitted'
+  return role === 'RESOURCE_MANAGER' && status !== 'completed' && (dpStatus === 'submitted' || dpStatus === 'resubmitted')
 })
 
 const canRejectPlan = computed(() => {
   const role = authStore.roleName
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return role === 'RESOURCE_MANAGER' && dpStatus === 'submitted'
+  return role === 'RESOURCE_MANAGER' && (dpStatus === 'submitted' || dpStatus === 'resubmitted')
 })
 
 const canShowRejectedTip = computed(() => {
   const role = authStore.roleName
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
   return role === 'RESOURCE_MANAGER' && dpStatus === 'rejected'
+})
+
+const canShowResourceRequestTip = computed(() => {
+  return incidentStore.currentIncident?.resourceDispatchStatus === 'shortage'
 })
 
 const imageList = computed<string[]>(() => {
@@ -108,7 +115,7 @@ function handleIncreaseConfirm(resourceId: string, quantity: number): void {
   if (!res) return
   const currentDispatched = res.dispatchedCount ?? 0
   if (currentDispatched + quantity > res.quantity) {
-    ElMessage.warning(`该资源数量不足，请前往资源调度页面增加该资源总数`)
+    ElMessage.warning('请去总仓库增添资源')
     return
   }
   res.dispatchedCount = currentDispatched + quantity
@@ -122,10 +129,29 @@ async function handleRejectShortage(): Promise<void> {
       cancelButtonText: '取消',
       type: 'warning',
     })
+    await fetch('/api/resource-shortage/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('token') || ''}` },
+      body: JSON.stringify({ incidentId }),
+    })
+    await incidentStore.fetchDetail(incidentId)
     ElMessage.success('已驳回资源不足申请')
-    router.push('/incident')
   } catch {
     return
+  }
+}
+
+async function handleResolveShortage(): Promise<void> {
+  try {
+    await fetch('/api/resource-shortage/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('token') || ''}` },
+      body: JSON.stringify({ incidentId }),
+    })
+    await incidentStore.fetchDetail(incidentId)
+    ElMessage.success('资源不足处理完成')
+  } catch {
+    ElMessage.error('操作失败')
   }
 }
 
@@ -171,12 +197,26 @@ async function handleDispatchResource(): Promise<void> {
   if (!res) return
   const currentDispatched = res.dispatchedCount ?? 0
   if (currentDispatched + dispatchQuantity.value > res.quantity) {
-    ElMessage.warning(`可用数量不足！${res.name}总数${res.quantity}，已调度${currentDispatched}，最多可分配${res.quantity - currentDispatched}。请前往资源调度界面增加资源总数`)
+    ElMessage.warning('该资源不足')
     return
   }
-  ElMessage.success('资源调度指令已提交')
-  selectedResourceId.value = ''
-  dispatchQuantity.value = 0
+  try {
+    await fetch('/api/resource-dispatch/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('token') || ''}` },
+      body: JSON.stringify({ incidentId, resourceId: selectedResourceId.value, quantity: dispatchQuantity.value }),
+    })
+    await incidentStore.fetchDetail(incidentId)
+    await disposalPlanStore.fetchList(incidentId)
+    if (disposalPlanStore.disposalPlanList.length > 0) {
+      disposalPlanStore.currentDisposalPlan = disposalPlanStore.disposalPlanList[0]
+    }
+    ElMessage.success('资源调度指令已提交')
+    selectedResourceId.value = ''
+    dispatchQuantity.value = 0
+  } catch {
+    ElMessage.error('提交调度失败')
+  }
 }
 
 onMounted(async () => {
@@ -229,7 +269,7 @@ onMounted(async () => {
             {{ incidentStore.currentIncident.propertyLoss ?? '未填写' }}
           </el-descriptions-item>
           <el-descriptions-item label="上报人">
-            {{ incidentStore.currentIncident.reporterId }}
+            {{ incidentStore.currentIncident.reporterName || incidentStore.currentIncident.reporterId || '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="上报时间">
             {{ incidentStore.currentIncident.reportTime ? formatDate(incidentStore.currentIncident.reportTime) : '-' }}
@@ -300,6 +340,9 @@ onMounted(async () => {
             </div>
           </div>
           <el-button type="primary" plain @click="addSearchItem" style="margin-top: 8px">增加资源</el-button>
+          <div style="margin-top: 16px; display: flex; gap: 8px">
+            <el-button type="success" @click="handleResolveShortage">完成处理</el-button>
+          </div>
         </el-card>
 
         <el-card
@@ -308,7 +351,10 @@ onMounted(async () => {
           class="incident-detail__dispatch"
         >
           <template #header>
-            <span>资源调度分配</span>
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+              <span>资源调度分配</span>
+              <span v-if="canShowResourceRequestTip" style="color:#F56C6C;font-size:13px">已提交资源申请，等待审批</span>
+            </div>
           </template>
           <el-form inline>
             <el-form-item label="选择资源">
@@ -347,7 +393,7 @@ onMounted(async () => {
           </template>
         </el-alert>
 
-        <div class="incident-detail__images" v-if="imageList.length">
+        <div class="incident-detail__images">
           <h3>现场图片</h3>
           <div v-if="imageList.length" class="incident-detail__image-list">
             <el-image

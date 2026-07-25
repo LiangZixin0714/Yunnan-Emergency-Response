@@ -77,9 +77,13 @@ function generateLinkedStatus(): LinkedStatus {
 
 
 function initMockData(): void {
+  const todayStr = fmtNow().slice(0, 10)
   for (let i = 0; i < 50; i++) {
     incidentIdCounter++
-    const dt = `2026-${String(randomInt(1, 7)).padStart(2, '0')}-${String(randomInt(1, 28)).padStart(2, '0')} ${String(randomInt(0, 23)).padStart(2, '0')}:${String(randomInt(0, 59)).padStart(2, '0')}:00`
+    const isToday = i < 15
+    const dt = isToday
+      ? `${todayStr} ${String(randomInt(0, 23)).padStart(2, '0')}:${String(randomInt(0, 59)).padStart(2, '0')}:00`
+      : `2026-${String(randomInt(1, 7)).padStart(2, '0')}-${String(randomInt(1, 28)).padStart(2, '0')} ${String(randomInt(0, 23)).padStart(2, '0')}:${String(randomInt(0, 59)).padStart(2, '0')}:00`
     const loc = `${randomItem(YUNNAN_REGIONS)}某区域`
     const [lat, lng] = getCoords(loc)
     const linked = generateLinkedStatus()
@@ -90,9 +94,10 @@ function initMockData(): void {
       occurTime: dt, location: loc,
       description: '该地区发生自然灾害，造成一定程度的影响，需要紧急处置。',
       status: linked.status, imageUrls: i % 3 === 0 ? '["/api/image/mock.jpg"]' : null,
-      reporterId: randomInt(1, 4), reportTime: dt, createdAt: dt, updatedAt: dt,
+      reporterId: randomInt(1, 4), reporterName: `信息员${randomInt(1, 4)}`, reportTime: dt, createdAt: dt, updatedAt: dt,
       latitude: lat + (Math.random() - 0.5) * 0.5, longitude: lng + (Math.random() - 0.5) * 0.5,
       deathCount: randomInt(0, 50),
+      affectedCount: randomInt(0, 500),
       propertyLoss: parseFloat((Math.random() * 5000).toFixed(2)),
       disposalPlanStatus: linked.disposalPlanStatus,
       resourceDispatchStatus: linked.resourceDispatchStatus,
@@ -159,7 +164,11 @@ function initMockData(): void {
 }
 initMockData()
 
-function fmtNow(): string { return new Date().toISOString().replace(/\.\d{3}Z$/, '').replace('T', ' ') }
+function fmtNow(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
 
 function success(data: unknown) { return { code: 0, message: 'success', data, timestamp: fmtNow() } }
 function error(message: string, code = 400) { return { code, message, data: null, timestamp: fmtNow() } }
@@ -225,7 +234,7 @@ export function mockPlugin() {
         }
         if (url === '/api/dashboard/trend') {
           const dates: string[] = [], counts: number[] = []
-          for (let i = 29; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const ds = d.toISOString().slice(0, 10); dates.push(`${d.getMonth() + 1}/${d.getDate()}`); counts.push(mockIncidents.filter((inc) => (inc.occurTime as string)?.slice(0, 10) === ds).length) }
+          for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const ds = d.toISOString().slice(0, 10); dates.push(`${d.getMonth() + 1}/${d.getDate()}`); counts.push(mockIncidents.filter((inc) => (inc.occurTime as string)?.slice(0, 10) === ds).length) }
           res.end(JSON.stringify(success({ dates, counts }))); return
         }
         if (url === '/api/dashboard/distribution') {
@@ -233,7 +242,7 @@ export function mockPlugin() {
         }
         if (url === '/api/dashboard/screen') {
           const today = new Date().toISOString().slice(0, 10)
-          const mapIncidents = mockIncidents.slice(0, 20).map((i) => ({ incidentId: i.incidentId, incidentName: i.incidentName, disasterType: i.disasterType, incidentLevel: i.incidentLevel, status: i.status, latitude: i.latitude, longitude: i.longitude }))
+          const mapIncidents = mockIncidents.filter((i) => i.status === 'processing').map((i) => ({ incidentId: i.incidentId, incidentName: i.incidentName, disasterType: i.disasterType, incidentLevel: i.incidentLevel, status: i.status, latitude: i.latitude, longitude: i.longitude, occurTime: i.occurTime ?? '', affectedCount: (i as Record<string, unknown>).deathCount ? Number((i as Record<string, unknown>).deathCount) : randomInt(0, 500) }))
           res.end(JSON.stringify(success({ statistics: { todayCount: mockIncidents.filter((i) => (i.occurTime as string)?.slice(0, 10) === today).length, activeCount: mockIncidents.filter((i) => i.status === 'processing').length, completedCount: mockIncidents.filter((i) => i.status === 'completed').length }, incidents: mockIncidents.slice(0, 10), resources: mockResources.slice(0, 20), mapIncidents }))); return
         }
 
@@ -260,8 +269,9 @@ export function mockPlugin() {
             incidentName: fields.incidentName || '新上报灾情事件', disasterType: fields.disasterType || 'earthquake',
             incidentLevel: fields.incidentLevel || 'III', occurTime: fields.occurTime || now,
             location: fields.location || '云南省昆明市', description: fields.description || '',
-            status: 'processing', imageUrls: null, reporterId: 1, reportTime: now, createdAt: now, updatedAt: now,
+            status: 'processing', imageUrls: fields.images ? '["/api/image/mock.jpg"]' : null, reporterId: 1, reporterName: fields.reporterName || '信息员', reportTime: now, createdAt: now, updatedAt: now,
             deathCount: fields.deathCount ? Number(fields.deathCount) : 0,
+            affectedCount: 0,
             propertyLoss: fields.propertyLoss ? parseFloat(fields.propertyLoss) : 0,
             disposalPlanStatus: null, resourceDispatchStatus: null,
           }
@@ -398,6 +408,7 @@ export function mockPlugin() {
           let filtered = [...mockDisposalPlans]
           if (incidentId) {
             filtered = filtered.filter((d) => d.incidentId === incidentId)
+            filtered.sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
             if (filtered.length === 0) {
               const incident = mockIncidents.find((i: any) => i.incidentId === incidentId)
               if (incident && (incident as any).disposalPlanStatus) {
@@ -427,6 +438,8 @@ export function mockPlugin() {
           let plan = mockDisposalPlans.find((d) => d.id === body.id)
           const now = fmtNow()
           if (!plan) {
+            const incident = mockIncidents.find((i: any) => i.incidentId === body.incidentId)
+            const wasRejected = incident && (incident as any).disposalPlanStatus === 'rejected'
             plan = {
               id: mockDisposalPlans.length + 1,
               disposalPlanId: `dp-${String(mockDisposalPlans.length + 1).padStart(3, '0')}`,
@@ -453,8 +466,14 @@ export function mockPlugin() {
               updatedAt: now,
             }
             mockPlans.push(newPlan)
+            if (incident) {
+              (incident as any).disposalPlanStatus = wasRejected ? 'resubmitted' : 'submitted'
+              ;(incident as any).resourceDispatchStatus = null
+              ;(incident as any).updatedAt = now
+            }
           } else {
             if (plan!.status !== 'draft' && plan!.status !== 'rejected') { res.end(JSON.stringify(error('仅草稿或已驳回状态的方案可以提交'))); return }
+            const wasRejected = plan!.status === 'rejected'
             if (body.planContent) plan!.planContent = body.planContent
             plan!.status = 'submitted'
             plan!.submittedBy = body.submittedBy || 2
@@ -465,6 +484,12 @@ export function mockPlugin() {
               linkedPlan.planContent = plan!.planContent
               linkedPlan.status = 'submitted'
               linkedPlan.updatedAt = now
+            }
+            const incident = mockIncidents.find((i: any) => i.incidentId === plan!.incidentId)
+            if (incident) {
+              (incident as any).disposalPlanStatus = wasRejected ? 'resubmitted' : 'submitted'
+              ;(incident as any).resourceDispatchStatus = null
+              ;(incident as any).updatedAt = now
             }
           }
           res.end(JSON.stringify(success(plan))); return
@@ -590,9 +615,47 @@ export function mockPlugin() {
             mockResourceRequests.push(req2)
             createdRequests.push(req2)
           }
-          ;(incident as any).resourceDispatchStatus = 'executing'
+          ;(incident as any).resourceDispatchStatus = 'shortage'
           ;(incident as any).updatedAt = now
           res.end(JSON.stringify(success(createdRequests))); return
+        }
+
+        if (url === '/api/resource-dispatch/submit' && req.method === 'POST') {
+          const body = await parseBody(req)
+          const incident = mockIncidents.find((i: any) => i.incidentId === body.incidentId)
+          if (!incident) { res.end(JSON.stringify(error('关联灾情不存在'))); return }
+          const now = fmtNow()
+          ;(incident as any).status = 'completed'
+          ;(incident as any).disposalPlanStatus = 'accepted'
+          ;(incident as any).resourceDispatchStatus = 'completed'
+          ;(incident as any).updatedAt = now
+          const resource = mockResources.find((r: any) => r.resourceId === body.resourceId)
+          if (resource) {
+            (resource as any).dispatchedCount = ((resource as any).dispatchedCount ?? 0) + (body.quantity || 0)
+            resource.updatedAt = now
+          }
+          res.end(JSON.stringify(success({ incidentId: body.incidentId }))); return
+        }
+
+        if (url === '/api/resource-shortage/resolve' && req.method === 'POST') {
+          const body = await parseBody(req)
+          const incident = mockIncidents.find((i: any) => i.incidentId === body.incidentId)
+          if (!incident) { res.end(JSON.stringify(error('关联灾情不存在'))); return }
+          const now = fmtNow()
+          ;(incident as any).resourceDispatchStatus = null
+          ;(incident as any).updatedAt = now
+          res.end(JSON.stringify(success({ incidentId: body.incidentId }))); return
+        }
+
+        if (url === '/api/resource-shortage/reject' && req.method === 'POST') {
+          const body = await parseBody(req)
+          const incident = mockIncidents.find((i: any) => i.incidentId === body.incidentId)
+          if (!incident) { res.end(JSON.stringify(error('关联灾情不存在'))); return }
+          const now = fmtNow()
+          ;(incident as any).disposalPlanStatus = 'rejected'
+          ;(incident as any).resourceDispatchStatus = 'shortage'
+          ;(incident as any).updatedAt = now
+          res.end(JSON.stringify(success({ incidentId: body.incidentId }))); return
         }
 
         if (url === '/api/resource-shortage/list') {
