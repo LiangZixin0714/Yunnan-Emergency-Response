@@ -69,7 +69,7 @@ async function loadData(): Promise<void> {
     }
     if (resourceChartRef.value) {
       const resourcesByType: Record<string, number> = {}
-      res.resources.forEach((r) => { resourcesByType[r.resourceType] = (resourcesByType[r.resourceType] || 0) + r.quantity })
+      res.resources.forEach((r) => { resourcesByType[r.resourceType] = (resourcesByType[r.resourceType] || 0) + r.totalStock })
       if (!resourceChart) resourceChart = echarts.init(resourceChartRef.value)
       resourceChart.setOption({
         title: { text: '资源分布', textStyle: { color: '#fff', fontSize: 14 } },

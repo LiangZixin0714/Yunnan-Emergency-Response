@@ -18,7 +18,7 @@ const emit = defineEmits<{
 const resourceOptions = computed(() => {
   return props.resourceList.map((res) => ({
     value: res.resourceId,
-    label: `${res.name}（总数${res.quantity}，已调度${res.dispatchedCount ?? 0}，可分配${res.quantity - (res.dispatchedCount ?? 0)}）`,
+    label: `${res.resourceName}（总数${res.totalStock}，已调度${res.lockedStock ?? 0}，可分配${res.totalStock - (res.lockedStock ?? 0)}）`,
   }))
 })
 

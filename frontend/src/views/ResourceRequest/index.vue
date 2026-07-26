@@ -52,7 +52,7 @@ function getSelectedResourceIds(excludeId?: number): string[] {
 
 function getResourceName(resourceId: string): string {
   const res = resourceStore.resourceList.find((r) => r.resourceId === resourceId)
-  return res?.name || ''
+  return res?.resourceName || ''
 }
 
 async function handleSubmitRequest(): Promise<void> {
@@ -148,7 +148,7 @@ onMounted(() => {
             <el-option
               v-for="res in resourceStore.resourceList"
               :key="res.resourceId"
-              :label="`${res.name}（总数${res.quantity}，已调度${res.dispatchedCount ?? 0}）`"
+              :label="`${res.resourceName}（总数${res.totalStock}，已调度${res.lockedStock ?? 0}）`"
               :value="res.resourceId"
               :disabled="getSelectedResourceIds(item.id).includes(res.resourceId)"
             />

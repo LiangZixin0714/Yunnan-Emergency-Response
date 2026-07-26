@@ -62,6 +62,9 @@ public class ImageController {
         } catch (Exception e) {
             logger.error("Error when serving image: {}", objectKey, e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        } catch (Exception e) {
+            logger.error("Error when serving image: {}", objectKey, e);
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
     }
 

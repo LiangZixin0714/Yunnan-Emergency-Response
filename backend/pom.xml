@@ -18,7 +18,11 @@
     <description>云南自然灾害应急协同决策平台</description>
 
     <properties>
+<<<<<<< HEAD
+        <java.version>19</java.version>
+=======
         <java.version>21</java.version>
+>>>>>>> 19399c23958c396276221fc3f5bb8b18a55eeaf4
         <jjwt.version>0.12.5</jjwt.version>
         <hibernate-spatial.version>6.4.4.Final</hibernate-spatial.version>
         <spring-cloud.version>2023.0.1</spring-cloud.version>
