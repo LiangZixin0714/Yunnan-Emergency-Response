@@ -8,11 +8,35 @@ from pydantic import BaseModel
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+_AI_SERVICE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PROJECT_ROOT = os.path.dirname(_AI_SERVICE_DIR)
+
+sys.path.insert(0, _AI_SERVICE_DIR)
 
 from services.vectorize_service import run_vectorize_pipeline
-from utils.db import get_connection
+
+
+def _import_root_db():
+    saved_utils = {k: v for k, v in sys.modules.items() if k == 'utils' or k.startswith('utils.')}
+    for k in saved_utils:
+        sys.modules.pop(k, None)
+    if _AI_SERVICE_DIR in sys.path:
+        sys.path.remove(_AI_SERVICE_DIR)
+    sys.path.insert(0, _PROJECT_ROOT)
+    import utils.db
+    db_mod = sys.modules['utils.db']
+    root_utils = {k: v for k, v in sys.modules.items() if k == 'utils' or k.startswith('utils.')}
+    for k in root_utils:
+        sys.modules.pop(k, None)
+    sys.path.remove(_PROJECT_ROOT)
+    sys.path.insert(0, _AI_SERVICE_DIR)
+    for k, v in saved_utils.items():
+        sys.modules[k] = v
+    return db_mod
+
+_db_mod = _import_root_db()
+get_connection = _db_mod.get_connection
 
 logger = logging.getLogger("ai-service")
 
@@ -58,7 +82,7 @@ async def vectorize_file(request: VectorizeRequest):
     return VectorizeResponse(**result)
 
 
-@router.delete("/vectors", response_model=DeleteVectorsResponse)
+@router.post("/vectors/delete", response_model=DeleteVectorsResponse)
 async def delete_vectors(request: DeleteVectorsRequest):
     """删除指定文档的向量数据。"""
     logger.info(f"收到向量删除请求: sourceFile={request.sourceFile}")

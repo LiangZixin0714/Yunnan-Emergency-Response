@@ -12,7 +12,7 @@ spring:
     mysql:
       jdbc-url: jdbc:mysql://127.0.0.1:3306/emergency_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=utf8
       username: root
-      password: Llabb888
+      password: ZAQ12wsx581!
       driver-class-name: com.mysql.cj.jdbc.Driver
     postgres:
       jdbc-url: jdbc:postgresql://127.0.0.1:5432/emergency_vector
