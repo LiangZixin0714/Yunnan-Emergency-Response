@@ -19,7 +19,7 @@ MYSQL_HOST = os.environ.get("MYSQL_HOST", "localhost")
 MYSQL_PORT = int(os.environ.get("MYSQL_PORT", "3306"))
 MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE", "emergency_db")
 MYSQL_USER = os.environ.get("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "ZAQ12wsx581!")
+MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "Llabb888")
 
 # 灾害类型与资源类型映射（根据 db-schema.md 数据字典）
 DISASTER_RESOURCE_MAP = {

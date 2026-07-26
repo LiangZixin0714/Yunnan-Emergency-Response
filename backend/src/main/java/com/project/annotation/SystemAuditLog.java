@@ -12,4 +12,10 @@ public @interface SystemAuditLog {
     String action() default "";
 
     String actionType() default "UPDATE";
+
+    String targetType() default "";
+
+    String targetId() default "";
+
+    String detail() default "";
 }

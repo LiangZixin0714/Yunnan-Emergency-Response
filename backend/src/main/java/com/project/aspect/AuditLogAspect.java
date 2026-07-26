@@ -2,7 +2,9 @@ package com.project.aspect;
 
 import com.project.annotation.SystemAuditLog;
 import com.project.entity.mysql.AuditLog;
+import com.project.entity.mysql.User;
 import com.project.repository.mysql.AuditLogRepository;
+import com.project.repository.mysql.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -21,6 +23,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 @Aspect
@@ -29,11 +32,17 @@ public class AuditLogAspect {
 
     private static final Logger logger = LoggerFactory.getLogger(AuditLogAspect.class);
 
+    private static final Set<String> SENSITIVE_PARAM_NAMES = Set.of(
+            "password", "token", "secret", "apiKey", "accessToken", "refreshToken", "credential", "privateKey"
+    );
+
     private final AuditLogRepository auditLogRepository;
+    private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
-    public AuditLogAspect(AuditLogRepository auditLogRepository, ObjectMapper objectMapper) {
+    public AuditLogAspect(AuditLogRepository auditLogRepository, UserRepository userRepository, ObjectMapper objectMapper) {
         this.auditLogRepository = auditLogRepository;
+        this.userRepository = userRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -48,6 +57,9 @@ public class AuditLogAspect {
         String module = auditLogAnnotation.module();
         String action = auditLogAnnotation.action();
         String actionType = auditLogAnnotation.actionType();
+        String targetType = auditLogAnnotation.targetType();
+        String targetId = auditLogAnnotation.targetId();
+        String detail = auditLogAnnotation.detail();
 
         Map<String, Object> requestParams = getRequestParams(joinPoint);
         String requestParamsJson = "";
@@ -83,7 +95,7 @@ public class AuditLogAspect {
             throw e;
         } finally {
             long duration = System.currentTimeMillis() - startTime;
-            saveAuditLogAsync(module, action, actionType, userId, username, requestParamsJson, resultJson, errorMessage, ipAddress, duration, success);
+            saveAuditLogAsync(module, action, actionType, targetType, targetId, detail, userId, username, requestParamsJson, resultJson, errorMessage, ipAddress, duration, success);
         }
     }
 
@@ -97,15 +109,19 @@ public class AuditLogAspect {
             for (int i = 0; i < paramNames.length; i++) {
                 Object value = paramValues[i];
                 if (value != null && !isSensitiveType(value.getClass())) {
-                    try {
-                        String jsonValue = objectMapper.writeValueAsString(value);
-                        if (jsonValue.length() > 1000) {
-                            params.put(paramNames[i], "[Large Object]");
-                        } else {
-                            params.put(paramNames[i], value);
+                    if (SENSITIVE_PARAM_NAMES.contains(paramNames[i])) {
+                        params.put(paramNames[i], "[Sensitive]");
+                    } else {
+                        try {
+                            String jsonValue = objectMapper.writeValueAsString(value);
+                            if (jsonValue.length() > 1000) {
+                                params.put(paramNames[i], "[Large Object]");
+                            } else {
+                                params.put(paramNames[i], value);
+                            }
+                        } catch (Exception e) {
+                            params.put(paramNames[i], value.toString());
                         }
-                    } catch (Exception e) {
-                        params.put(paramNames[i], value.toString());
                     }
                 } else {
                     params.put(paramNames[i], "[Sensitive/Stream]");
@@ -183,12 +199,20 @@ public class AuditLogAspect {
     }
 
     private Long getUserIdFromUsername(String username) {
-        return null;
+        try {
+            return userRepository.findByUsername(username)
+                    .map(User::getId)
+                    .orElse(null);
+        } catch (Exception e) {
+            logger.error("根据用户名查询用户ID失败: {}", username, e);
+            return null;
+        }
     }
 
-    private void saveAuditLogAsync(String module, String action, String actionType, Long userId, String username,
-                                   String requestParams, String result, String errorMessage, String ipAddress,
-                                   long duration, boolean success) {
+    private void saveAuditLogAsync(String module, String action, String actionType, String targetType,
+                                    String targetId, String detail, Long userId, String username,
+                                    String requestParams, String result, String errorMessage, String ipAddress,
+                                    long duration, boolean success) {
         CompletableFuture.runAsync(() -> {
             try {
                 AuditLog auditLog = new AuditLog();
@@ -197,11 +221,13 @@ public class AuditLogAspect {
                 auditLog.setModule(module);
                 auditLog.setAction(action);
                 auditLog.setActionType(actionType);
+                auditLog.setTargetType(targetType != null && !targetType.isEmpty() ? targetType : null);
+                auditLog.setTargetId(targetId != null && !targetId.isEmpty() ? targetId : null);
                 auditLog.setRequestParams(requestParams);
                 auditLog.setResult(success ? result : ("ERROR: " + errorMessage));
                 auditLog.setIpAddress(ipAddress);
                 auditLog.setDuration(duration);
-                auditLog.setDetail(action);
+                auditLog.setDetail(detail != null && !detail.isEmpty() ? detail : action);
 
                 auditLogRepository.save(auditLog);
                 logger.debug("审计日志保存成功: module={}, action={}, userId={}", module, action, userId);

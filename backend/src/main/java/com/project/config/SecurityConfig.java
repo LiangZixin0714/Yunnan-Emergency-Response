@@ -59,6 +59,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**").permitAll()
                         // 【关键修改】：将应急方案的 SSE 流式生成接口放行，彻底避开 Spring Security 的 403 拦截
                         .requestMatchers("/api/plan/stream").permitAll()
+                        .requestMatchers("/api/agent/log").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

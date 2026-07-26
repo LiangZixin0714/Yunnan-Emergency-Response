@@ -25,6 +25,9 @@ public class Citation {
     @Column(name = "incident_id", length = 64)
     private String incidentId;
 
+    @Column(name = "run_id", length = 64)
+    private String runId;
+
     @Column(name = "source_text", columnDefinition = "TEXT")
     private String sourceText;
 

@@ -19,7 +19,8 @@ VLLM_API_KEY = os.environ.get("VLLM_API_KEY", "EMPTY")
 
 _client = OpenAI(
     base_url=VLLM_BASE_URL,
-    api_key=VLLM_API_KEY
+    api_key=VLLM_API_KEY,
+    timeout=120.0
 )
 
 

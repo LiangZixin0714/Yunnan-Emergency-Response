@@ -84,17 +84,16 @@ async def generate_plan(request: Request) -> JSONResponse:
     响应：{"plan": "生成的方案文本"}
     """
     try:
-        # 解析请求体
         data = await request.json()
         description = data.get("description", "")
+        incident_id = data.get("incidentId", "")
         
         if not description or not description.strip():
             raise HTTPException(status_code=400, detail="description字段不能为空")
         
         logger.info(f"📥 收到方案生成请求，描述长度: {len(description)}")
         
-        # 执行工作流
-        result = run_workflow(description)
+        result = run_workflow(description, incident_id=incident_id)
         
         # 提取方案文本
         plan = result.get("plan", "")
@@ -130,6 +129,7 @@ async def generate_plan_stream(request: Request) -> StreamingResponse:
     try:
         data = await request.json()
         description = data.get("description", "")
+        incident_id = data.get("incidentId", "")
         
         if not description or not description.strip():
             raise HTTPException(status_code=400, detail="description字段不能为空")
@@ -139,7 +139,7 @@ async def generate_plan_stream(request: Request) -> StreamingResponse:
         async def stream_generator() -> AsyncGenerator[str, None]:
             """流式输出生成器。"""
             try:
-                for chunk in run_workflow_stream(description):
+                for chunk in run_workflow_stream(description, incident_id=incident_id):
                     if chunk:
                         yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
                 
