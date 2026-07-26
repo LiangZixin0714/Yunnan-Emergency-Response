@@ -14,9 +14,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from utils.logger import setup_logger
+<<<<<<< HEAD
 from agents.orchestrator import run_workflow
 from middleware.api_key_auth import ApiKeyAuthMiddleware
 from routers.vectorize_router import router as vectorize_router
+=======
+from agents.orchestrator import run_workflow, run_workflow_stream
+>>>>>>> ae36d2a503463352eb382379cc20f01ef71af3d2
 
 logger = setup_logger()
 
@@ -124,7 +128,6 @@ async def generate_plan_stream(request: Request) -> StreamingResponse:
     响应：流式输出方案内容
     """
     try:
-        # 解析请求体
         data = await request.json()
         description = data.get("description", "")
         
@@ -136,26 +139,11 @@ async def generate_plan_stream(request: Request) -> StreamingResponse:
         async def stream_generator() -> AsyncGenerator[str, None]:
             """流式输出生成器。"""
             try:
-                # 执行工作流
-                result = run_workflow(description)
-                plan = result.get("plan", "")
+                for chunk in run_workflow_stream(description):
+                    if chunk:
+                        yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
                 
-                if not plan:
-                    yield f"data: {json.dumps({'error': '方案生成失败'})}\n\n"
-                    return
-                
-                # 流式输出方案内容（按段落分割）
-                paragraphs = plan.split('\n\n')
-                
-                for i, paragraph in enumerate(paragraphs):
-                    if paragraph.strip():
-                        chunk = {
-                            "chunk": paragraph.strip(),
-                            "index": i,
-                            "total": len(paragraphs),
-                            "done": i == len(paragraphs) - 1
-                        }
-                        yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                yield "data: {\"done\": true}\n\n"
                 
             except Exception as e:
                 logger.error(f"❌ 流式输出失败: {e}")

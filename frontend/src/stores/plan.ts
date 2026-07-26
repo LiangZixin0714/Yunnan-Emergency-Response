@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Plan } from '@/types/plan'
-import { getPlanList, getPlanDetail, streamPlan } from '@/api/plan'
+import { getPlanList, getPlanDetail, streamPlan, deletePlan } from '@/api/plan'
 import { getStoredToken } from '@/utils/token'
 
 export const usePlanStore = defineStore('plan', () => {
@@ -26,18 +26,39 @@ export const usePlanStore = defineStore('plan', () => {
     streaming.value = true
     streamingContent.value = ''
     const token = getStoredToken() || ''
+    console.log('startStream: incidentId:', incidentId, 'token:', token ? 'has token' : 'no token')
 
     streamPlan(
       incidentId,
       token,
-      (text: string) => { streamingContent.value += text },
-      () => { streaming.value = false },
-      () => { streaming.value = false },
+      (text: string) => { 
+        console.log('startStream: received chunk, length:', text.length)
+        streamingContent.value += text 
+      },
+      () => { 
+        console.log('startStream: done')
+        streaming.value = false 
+      },
+      (err) => { 
+        console.log('startStream: error:', err)
+        streaming.value = false 
+      },
     )
   }
 
   function stopStream(): void {
     streaming.value = false
+  }
+
+  async function removePlan(planId: string): Promise<void> {
+    await deletePlan(planId)
+    const index = planList.value.findIndex(p => p.planId === planId)
+    if (index !== -1) {
+      planList.value.splice(index, 1)
+    }
+    if (currentPlan.value?.planId === planId) {
+      currentPlan.value = null
+    }
   }
 
   return {
@@ -49,5 +70,6 @@ export const usePlanStore = defineStore('plan', () => {
     fetchDetail,
     startStream,
     stopStream,
+    removePlan,
   }
 })

@@ -6,7 +6,7 @@ import { useIncidentStore } from '@/stores/incident'
 import { useDisposalPlanStore } from '@/stores/disposal-plan'
 import { PlanStatusLabel, PlanStatusTagType, DisposalPlanStatusLabel, DisposalPlanStatusTagType } from '@/types/enums'
 import type { PlanStatusValue, DisposalPlanStatusValue } from '@/types/enums'
-import { ElMessage, ElLoading } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { formatDate } from '@/utils/format'
 import StatusTag from '@/components/StatusTag.vue'
 import Vditor from 'vditor'
@@ -20,7 +20,6 @@ const disposalPlanStore = useDisposalPlanStore()
 
 const selectedIncidentId = ref('')
 const selectedPlanId = ref('')
-const streamMode = ref(false)
 const editableContent = ref('')
 const editorRef = ref<HTMLDivElement | null>(null)
 let vditorInstance: Vditor | null = null
@@ -31,13 +30,16 @@ const disposalPlanStatusMap = Object.fromEntries(
     { label, type: DisposalPlanStatusTagType[key as DisposalPlanStatusValue] },
   ])
 )
-
 function initEditor(): void {
   if (!editorRef.value) return
   vditorInstance = new Vditor(editorRef.value, {
     height: 500,
     mode: 'sv',
     theme: 'classic',
+    // 【必须加上 cache.id，防止 Vditor 内部报错崩溃】
+    cache: {
+      enable: false, // 或者给个唯一字符串 id，比如 id: 'disposal-plan-editor'
+    },
     toolbar: ['bold', 'italic', 'heading', 'list', 'quote', 'link', 'hr'],
     preview: {
       theme: {
@@ -49,6 +51,23 @@ function initEditor(): void {
     },
   })
 }
+// function initEditor(): void {
+//   if (!editorRef.value) return
+//   vditorInstance = new Vditor(editorRef.value, {
+//     height: 500,
+//     mode: 'sv',
+//     theme: 'classic',
+//     toolbar: ['bold', 'italic', 'heading', 'list', 'quote', 'link', 'hr'],
+//     preview: {
+//       theme: {
+//         current: 'classic',
+//       },
+//     },
+//     input: (value) => {
+//       editableContent.value = value
+//     },
+//   })
+// }
 
 function updateEditorContent(content: string): void {
   if (vditorInstance) {
@@ -76,52 +95,134 @@ async function handleGenerate(): Promise<void> {
     ElMessage.warning('请先选择灾情事件')
     return
   }
-  streamMode.value = true
   editableContent.value = ''
   if (vditorInstance) {
     vditorInstance.setValue('')
   }
   planStore.startStream(selectedIncidentId.value)
-  const stopWatch = watch(() => planStore.streaming, (newVal, oldVal) => {
-    if (oldVal === true && newVal === false) {
-      streamMode.value = false
-      if (planStore.streamingContent) {
-        editableContent.value = planStore.streamingContent
-        updateEditorContent(planStore.streamingContent)
-        ElMessage.success('方案已生成完毕')
-      } else {
-        ElMessage.error('连接已断开，已保存已接收的内容')
-      }
-      stopWatch()
-    }
-  })
 }
 
 function handleStopStream(): void {
   planStore.stopStream()
-  streamMode.value = false
   if (selectedIncidentId.value) {
     planStore.fetchList(selectedIncidentId.value)
   }
 }
 
 async function selectPlan(planId: string): Promise<void> {
-  streamMode.value = false
   selectedPlanId.value = planId
   await planStore.fetchDetail(planId)
   editableContent.value = planStore.currentPlan?.planContent || ''
-  updateEditorContent(editableContent.value)
+  if (vditorInstance) {
+    updateEditorContent(editableContent.value)
+  }
 }
 
+// async function handleSaveDraft(): Promise<void> {
+//   const content = vditorInstance?.getValue() || editableContent.value
+//   if (!content.trim()) {
+//     ElMessage.warning('方案内容不能为空')
+//     return
+//   }
+//   try {
+//     await disposalPlanStore.saveDisposalPlan(
+//       planStore.currentPlan?.id ?? 0,
+//       content,
+//       selectedIncidentId.value
+//     )
+//     ElMessage.success('草稿已保存')
+//     if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+//   } catch {
+//     ElMessage.error('草稿保存失败，请重试')
+//   }
+// }
+
+// async function handleSubmitDisposalPlan(): Promise<void> {
+//   const content = vditorInstance?.getValue() || editableContent.value
+//   if (!content.trim()) {
+//     ElMessage.warning('方案内容不能为空，请先拟定处置方案')
+//     return
+//   }
+//   try {
+//     await disposalPlanStore.submitDisposalPlan(
+//       planStore.currentPlan?.id ?? 0,
+//       content,
+//       selectedIncidentId.value
+//     )
+//     ElMessage.success('处置方案已提交给资源管理员')
+//     if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+//   } catch {
+//     ElMessage.error('提交失败，请稍后重试')
+//   }
+// }
+// async function handleSaveDraft(): Promise<void> {
+//   const content = vditorInstance?.getValue() || editableContent.value
+//   if (!content.trim()) {
+//     ElMessage.warning('方案内容不能为空')
+//     return
+//   }
+//   // 【修复】：优先取 planId，如果没有则提示或兼容
+//   const targetPlanId = planStore.currentPlan?.planId
+//   if (!targetPlanId) {
+//     ElMessage.warning('请先选择或生成一个有效的方案')
+//     return
+//   }
+
+//   try {
+//     await disposalPlanStore.saveDisposalPlan(
+//       targetPlanId as any, // 如果后端要求 String 就传 string，要求 Long 根据实际后端调整
+//       content,
+//       selectedIncidentId.value
+//     )
+//     ElMessage.success('草稿已保存')
+//     if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+//   } catch {
+//     ElMessage.error('草稿保存失败，请重试')
+//   }
+// }
+
+// async function handleSubmitDisposalPlan(): Promise<void> {
+//   const content = vditorInstance?.getValue() || editableContent.value
+//   if (!content.trim()) {
+//     ElMessage.warning('方案内容不能为空，请先拟定处置方案')
+//     return
+//   }
+  
+//   const targetPlanId = planStore.currentPlan?.planId
+//   if (!targetPlanId) {
+//     ElMessage.warning('请先选择或生成一个有效的方案')
+//     return
+//   }
+
+//   try {
+//     await disposalPlanStore.submitDisposalPlan(
+//       targetPlanId as any,
+//       content,
+//       selectedIncidentId.value
+//     )
+//     ElMessage.success('处置方案已提交给资源管理员')
+//     if (selectedIncidentId.value) await planStore.fetchList(selectedIncidentId.value)
+//   } catch {
+//     ElMessage.error('提交失败，请稍后重试')
+//   }
+// }
 async function handleSaveDraft(): Promise<void> {
   const content = vditorInstance?.getValue() || editableContent.value
   if (!content.trim()) {
     ElMessage.warning('方案内容不能为空')
     return
   }
+  
+  // 【关键修复】：必须取数字自增主键 id，而不是字符串 planId
+  const targetId = planStore.currentPlan?.id
+  if (!targetId) {
+    ElMessage.warning('请先选择或生成一个有效的方案')
+    return
+  }
+
   try {
     await disposalPlanStore.saveDisposalPlan(
-      planStore.currentPlan?.id ?? 0,
+      targetId, // 传数字 Long id
       content,
       selectedIncidentId.value
     )
@@ -138,9 +239,17 @@ async function handleSubmitDisposalPlan(): Promise<void> {
     ElMessage.warning('方案内容不能为空，请先拟定处置方案')
     return
   }
+  
+  // 【关键修复】：必须取数字自增主键 id，而不是字符串 planId
+  const targetId = planStore.currentPlan?.id
+  if (!targetId) {
+    ElMessage.warning('请先选择或生成一个有效的方案')
+    return
+  }
+
   try {
     await disposalPlanStore.submitDisposalPlan(
-      planStore.currentPlan?.id ?? 0,
+      targetId, // 传数字 Long id
       content,
       selectedIncidentId.value
     )
@@ -193,22 +302,61 @@ async function handleExportWord(planId: string): Promise<void> {
   }
 }
 
+async function handleDeletePlan(planId: string): Promise<void> {
+  try {
+    await ElMessageBox.confirm('确认删除该方案？删除后无法恢复。', '确认删除', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await planStore.removePlan(planId)
+    ElMessage.success('方案已删除')
+    editableContent.value = ''
+    if (vditorInstance) {
+      vditorInstance.setValue('')
+    }
+  } catch {
+    ElMessage.info('已取消删除')
+  }
+}
+
 watch(() => planStore.streamingContent, (val) => {
   if (planStore.streaming) {
     editableContent.value = val
-    updateEditorContent(val)
+  }
+})
+
+watch(() => planStore.streaming, (newVal, oldVal) => {
+  if (oldVal === true && newVal === false) {
+    if (planStore.streamingContent) {
+      editableContent.value = planStore.streamingContent
+      if (vditorInstance) {
+        updateEditorContent(planStore.streamingContent)
+      }
+      ElMessage.success('方案已生成完毕')
+    } else {
+      ElMessage.error('连接已断开，已保存已接收的内容')
+    }
+    if (selectedIncidentId.value) {
+      planStore.fetchList(selectedIncidentId.value)
+    }
   }
 })
 
 onMounted(() => {
   loadIncidents()
-  nextTick(() => {
-    initEditor()
-  })
   const incidentId = route.query.incidentId as string | undefined
   if (incidentId) {
     selectedIncidentId.value = incidentId
     loadPlans()
+  }
+})
+
+watch(selectedIncidentId, (newVal) => {
+  if (newVal && !vditorInstance) {
+    nextTick(() => {
+      initEditor()
+    })
   }
 })
 </script>
@@ -276,23 +424,31 @@ onMounted(() => {
             </el-tag>
           </div>
           <div class="plan-page__item-actions">
-            <el-button
-              size="small"
-              type="primary"
-              plain
-              @click.stop="handleExportPdf(plan.planId)"
-            >
-              PDF
-            </el-button>
-            <el-button
-              size="small"
-              type="success"
-              plain
-              @click.stop="handleExportWord(plan.planId)"
-            >
-              Word
-            </el-button>
-          </div>
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                @click.stop="handleExportPdf(plan.planId)"
+              >
+                PDF
+              </el-button>
+              <el-button
+                size="small"
+                type="success"
+                plain
+                @click.stop="handleExportWord(plan.planId)"
+              >
+                Word
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                @click.stop="handleDeletePlan(plan.planId)"
+              >
+                删除
+              </el-button>
+            </div>
         </div>
       </el-card>
 
@@ -310,8 +466,9 @@ onMounted(() => {
           </div>
         </template>
 
-        <div v-if="!planStore.currentPlan && !editableContent" class="plan-page__empty">请选择或生成方案</div>
-        <div v-else>
+        <div v-show="!planStore.currentPlan && !editableContent && !planStore.streaming" class="plan-page__empty">请选择或生成方案</div>
+        
+        <div v-show="planStore.currentPlan || editableContent || planStore.streaming">
           <template v-if="planStore.currentPlan">
             <h3>{{ planStore.currentPlan.planTitle }}</h3>
             <div class="plan-page__content-meta">
@@ -322,8 +479,14 @@ onMounted(() => {
             </div>
             <el-divider />
           </template>
-          <div ref="editorRef" class="plan-page__editor"></div>
-          <div class="plan-page__draft-submit-area" v-if="editableContent">
+
+          <div v-if="planStore.streaming" class="plan-page__streaming-content">
+            <div class="plan-page__streaming-content-inner">{{ planStore.streamingContent }}</div>
+          </div>
+
+          <div v-show="!planStore.streaming" ref="editorRef" class="plan-page__editor"></div>
+
+          <div class="plan-page__draft-submit-area" v-if="editableContent && !planStore.streaming">
             <el-button type="primary" plain @click="handleSaveDraft">保存草稿</el-button>
             <el-button type="primary" @click="handleSubmitDisposalPlan">确认提交</el-button>
           </div>
@@ -404,6 +567,22 @@ onMounted(() => {
 
 .plan-page__editor {
   min-height: 500px;
+}
+
+.plan-page__streaming-content {
+  min-height: 500px;
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-page);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-y: auto;
+}
+
+.plan-page__streaming-content-inner {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .plan-page__detail h3 {

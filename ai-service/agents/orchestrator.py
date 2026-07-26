@@ -11,7 +11,7 @@ from langgraph.graph import StateGraph, END
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.logger import setup_logger
 from agents.info_extractor import extract_incident_info
-from agents.plan_generator import generate_plan
+from agents.plan_generator import generate_plan, generate_plan_stream
 from agents.plan_reviewer import review_plan
 from agents.resource_dispatcher import dispatch_resources
 from rag.retriever import retrieve_plans
@@ -257,6 +257,33 @@ def run_workflow(description: str) -> Dict[str, Any]:
             "review": {},
             "messages": [f"工作流执行失败: {e}, 耗时={total_elapsed:.2f}秒"]
         }
+
+
+def run_workflow_stream(description: str):
+    """运行流式工作流，返回生成器。"""
+    logger.info(f"🚀 开始执行流式工作流，描述长度: {len(description)}")
+    
+    try:
+        info = extract_incident_info(description)
+        logger.info(f"✅ 情报分析完成")
+        
+        disaster_type = info.get("type", "")
+        location = info.get("location", "")
+        query = f"{disaster_type} {location} 应急处置"
+        retrieved_plans = retrieve_plans(query, limit=3)
+        logger.info(f"✅ RAG检索完成，返回 {len(retrieved_plans)} 条预案")
+        
+        resources = dispatch_resources(info)
+        logger.info(f"✅ 资源调度完成，返回 {len(resources)} 条资源")
+        
+        for chunk in generate_plan_stream(info, description, retrieved_plans, resources):
+            yield chunk
+            
+        logger.info(f"✅ 流式工作流执行完成")
+        
+    except Exception as e:
+        logger.error(f"❌ 流式工作流执行失败: {e}")
+        yield f"工作流执行失败: {e}"
 
 
 if __name__ == "__main__":

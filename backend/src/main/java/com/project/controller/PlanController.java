@@ -52,6 +52,13 @@ public class PlanController {
         return planService.streamPlan(incidentId);
     }
 
+    @DeleteMapping("/delete")
+    public ResponseEntity<Result<Void>> deletePlan(
+            @RequestParam @NotBlank(message = "planId不能为空") String planId) {
+        planService.deletePlan(planId);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
     @PostMapping("/review")
     public ResponseEntity<Result<Plan>> reviewPlan(
             @Valid @RequestBody ReviewPlanRequest request) {
