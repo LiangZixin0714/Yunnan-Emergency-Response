@@ -10,7 +10,7 @@ const agentLoading = ref(false)
 const agentData = ref<PageResult<AgentRun>>({ list: [], total: 0, page: 1, size: 10 })
 const agentPage = ref(1)
 const agentSize = ref(10)
-const agentFilters = ref({ incidentId: '', agentName: '', status: '' })
+const agentFilters = ref({ agentName: '', status: '' })
 
 const auditLoading = ref(false)
 const auditData = ref<PageResult<AuditLog>>({ list: [], total: 0, page: 1, size: 10 })
@@ -50,7 +50,6 @@ async function fetchAgentRuns() {
     const res = await getAgentRunList({
       page: agentPage.value,
       size: agentSize.value,
-      incidentId: agentFilters.value.incidentId || undefined,
       agentName: agentFilters.value.agentName || undefined,
       status: agentFilters.value.status || undefined,
     })
@@ -150,9 +149,6 @@ onMounted(() => {
       <el-tab-pane label="Agent执行记录" name="agent">
         <el-card shadow="hover" style="margin-bottom: 16px">
           <el-form :inline="true" @submit.prevent="searchAgent">
-            <el-form-item label="灾情ID">
-              <el-input v-model="agentFilters.incidentId" placeholder="输入incidentId" clearable style="width: 200px" />
-            </el-form-item>
             <el-form-item label="Agent名称">
               <el-input v-model="agentFilters.agentName" placeholder="输入agentName" clearable style="width: 160px" />
             </el-form-item>
@@ -171,7 +167,6 @@ onMounted(() => {
           <el-table :data="agentData.list" v-loading="agentLoading" stripe @row-click="showAgentDetail" style="cursor: pointer">
             <el-table-column prop="runId" label="Run ID" width="180" show-overflow-tooltip />
             <el-table-column prop="agentName" label="Agent名称" width="140" />
-            <el-table-column prop="incidentId" label="灾情ID" width="180" show-overflow-tooltip />
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)" size="small">{{ row.status }}</el-tag>

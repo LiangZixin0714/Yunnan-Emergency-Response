@@ -57,3 +57,8 @@ def get_logger(name: str, log_dir: Optional[str] = None) -> logging.Logger:
 
     _loggers[name] = logger
     return logger
+
+
+def setup_logger() -> logging.Logger:
+    """配置全局日志记录器（兼容 ai-service 调用）。"""
+    return get_logger("ai-service")

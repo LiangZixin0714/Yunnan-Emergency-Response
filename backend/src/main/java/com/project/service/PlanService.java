@@ -1,6 +1,7 @@
 package com.project.service;
 
 import com.project.annotation.SystemAuditLog;
+import com.project.config.AiServiceConfig;
 import com.project.entity.mysql.Incident;
 import com.project.entity.mysql.Plan;
 import com.project.repository.mysql.IncidentRepository;
@@ -30,7 +31,6 @@ public class PlanService {
     private static final Logger logger = LoggerFactory.getLogger(PlanService.class);
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
 
-    private static final String AI_SERVICE_BASE_URL = "http://127.0.0.1:8002";
     private static final String AI_SYNC_API = "/api/v1/generate-plan";
     private static final String AI_STREAM_API = "/api/v1/generate-plan/stream";
     private static final int SSE_SLEEP_MS = 50;
@@ -41,11 +41,21 @@ public class PlanService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    public PlanService(PlanRepository planRepository, IncidentRepository incidentRepository) {
+    public PlanService(PlanRepository planRepository,
+                       IncidentRepository incidentRepository,
+                       AiServiceConfig aiServiceConfig) {
         this.planRepository = planRepository;
         this.incidentRepository = incidentRepository;
-        this.restClient = RestClient.create(AI_SERVICE_BASE_URL);
-        this.webClient = WebClient.builder().baseUrl(AI_SERVICE_BASE_URL).build();
+        String baseUrl = aiServiceConfig.getUrl() != null ? aiServiceConfig.getUrl() : "http://127.0.0.1:8002";
+        String apiKey = aiServiceConfig.getApiKey() != null ? aiServiceConfig.getApiKey() : "emergency-platform-ai-service-key-2024";
+        this.restClient = RestClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("X-API-Key", apiKey)
+                .build();
+        this.webClient = WebClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("X-API-Key", apiKey)
+                .build();
         this.objectMapper = new ObjectMapper();
     }
 

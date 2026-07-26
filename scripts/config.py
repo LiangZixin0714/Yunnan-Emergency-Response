@@ -63,7 +63,7 @@ MYSQL_DB: str = os.environ.get("MYSQL_DB", "emergency_db")
 PG_HOST: str = os.environ.get("PG_HOST", "localhost")
 PG_PORT: int = int(os.environ.get("PG_PORT", "5432"))
 PG_USER: str = os.environ.get("PG_USER", "postgres")
-PG_PASSWORD: str = os.environ.get("PG_PASSWORD", "")
+PG_PASSWORD: str = os.environ.get("PG_PASSWORD", "ZAQ12wsx581!")
 PG_DB: str = os.environ.get("PG_DB", "emergency_vector")
 
 PG_TABLE_NAME: str = "knowledge_chunks"

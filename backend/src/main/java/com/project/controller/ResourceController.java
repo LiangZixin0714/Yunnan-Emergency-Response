@@ -6,6 +6,7 @@ import com.project.entity.mysql.ResourceDispatchRecord;
 import com.project.service.ResourceService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/resource")
@@ -36,6 +38,41 @@ public class ResourceController {
     public ResponseEntity<Result<List<EmergencyResource>>> getAllResources() {
         List<EmergencyResource> resources = resourceService.getAllResources();
         return ResponseEntity.ok(Result.success(resources));
+    }
+
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Result<EmergencyResource>> createResource(
+            @Valid @RequestBody CreateResourceRequest request) {
+        EmergencyResource resource = new EmergencyResource();
+        resource.setResourceId("res-" + UUID.randomUUID().toString().substring(0, 8));
+        resource.setResourceName(request.getResourceName());
+        resource.setResourceType(request.getResourceType());
+        resource.setUnit(request.getUnit());
+        resource.setTotalStock(request.getTotalStock() != null ? request.getTotalStock() : 0);
+        resource.setAvailableStock(request.getAvailableStock() != null ? request.getAvailableStock() : request.getTotalStock());
+        resource.setLockedStock(0);
+        resource.setLocation(request.getLocation());
+        resource.setDescription(request.getDescription());
+        resource.setStatus("available");
+        EmergencyResource saved = resourceService.createResource(resource);
+        return ResponseEntity.ok(Result.success(saved));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Result<EmergencyResource>> updateResource(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateResourceRequest request) {
+        EmergencyResource updated = resourceService.updateResource(id, request);
+        return ResponseEntity.ok(Result.success(updated));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Result<Map<String, Object>>> deleteResource(@PathVariable Long id) {
+        resourceService.deleteResource(id);
+        return ResponseEntity.ok(Result.success(Map.of("deleted", true)));
     }
 
     @PostMapping("/lock")
@@ -84,6 +121,154 @@ public class ResourceController {
             @RequestParam(required = false) String incidentId) {
         List<ResourceDispatchRecord> records = resourceService.getDispatchRecords(resourceId, incidentId);
         return ResponseEntity.ok(Result.success(records));
+    }
+
+    public static class CreateResourceRequest {
+        @NotBlank(message = "资源名称不能为空")
+        private String resourceName;
+
+        private String resourceType;
+
+        private String unit;
+
+        private Integer totalStock;
+
+        private Integer availableStock;
+
+        private String location;
+
+        private String description;
+
+        public String getResourceName() {
+            return resourceName;
+        }
+
+        public void setResourceName(String resourceName) {
+            this.resourceName = resourceName;
+        }
+
+        public String getResourceType() {
+            return resourceType;
+        }
+
+        public void setResourceType(String resourceType) {
+            this.resourceType = resourceType;
+        }
+
+        public String getUnit() {
+            return unit;
+        }
+
+        public void setUnit(String unit) {
+            this.unit = unit;
+        }
+
+        public Integer getTotalStock() {
+            return totalStock;
+        }
+
+        public void setTotalStock(Integer totalStock) {
+            this.totalStock = totalStock;
+        }
+
+        public Integer getAvailableStock() {
+            return availableStock;
+        }
+
+        public void setAvailableStock(Integer availableStock) {
+            this.availableStock = availableStock;
+        }
+
+        public String getLocation() {
+            return location;
+        }
+
+        public void setLocation(String location) {
+            this.location = location;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
+        }
+    }
+
+    public static class UpdateResourceRequest {
+        private String resourceName;
+        private String resourceType;
+        private String unit;
+        private Integer totalStock;
+        private Integer availableStock;
+        private String location;
+        private String description;
+        private String status;
+
+        public String getResourceName() {
+            return resourceName;
+        }
+
+        public void setResourceName(String resourceName) {
+            this.resourceName = resourceName;
+        }
+
+        public String getResourceType() {
+            return resourceType;
+        }
+
+        public void setResourceType(String resourceType) {
+            this.resourceType = resourceType;
+        }
+
+        public String getUnit() {
+            return unit;
+        }
+
+        public void setUnit(String unit) {
+            this.unit = unit;
+        }
+
+        public Integer getTotalStock() {
+            return totalStock;
+        }
+
+        public void setTotalStock(Integer totalStock) {
+            this.totalStock = totalStock;
+        }
+
+        public Integer getAvailableStock() {
+            return availableStock;
+        }
+
+        public void setAvailableStock(Integer availableStock) {
+            this.availableStock = availableStock;
+        }
+
+        public String getLocation() {
+            return location;
+        }
+
+        public void setLocation(String location) {
+            this.location = location;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
     }
 
     public static class LockResourceRequest {

@@ -1,8 +1,10 @@
 package com.project.service;
 
 import com.project.annotation.SystemAuditLog;
+import com.project.entity.mysql.EmergencyResource;
 import com.project.entity.mysql.Incident;
 import com.project.entity.mysql.ResourceRequest;
+import com.project.repository.mysql.EmergencyResourceRepository;
 import com.project.repository.mysql.IncidentRepository;
 import com.project.repository.mysql.ResourceRequestRepository;
 import org.slf4j.Logger;
@@ -21,15 +23,24 @@ public class ResourceRequestService {
 
     private final ResourceRequestRepository resourceRequestRepository;
     private final IncidentRepository incidentRepository;
+    private final EmergencyResourceRepository resourceRepository;
 
     public ResourceRequestService(ResourceRequestRepository resourceRequestRepository,
-                                  IncidentRepository incidentRepository) {
+                                  IncidentRepository incidentRepository,
+                                  EmergencyResourceRepository resourceRepository) {
         this.resourceRequestRepository = resourceRequestRepository;
         this.incidentRepository = incidentRepository;
+        this.resourceRepository = resourceRepository;
     }
 
     public List<ResourceRequest> listByIncidentId(String incidentId) {
         return resourceRequestRepository.findByIncidentIdOrderByCreatedAtDesc(incidentId);
+    }
+
+    public List<ResourceRequest> listPending() {
+        return resourceRequestRepository.findAll().stream()
+                .filter(r -> "pending".equals(r.getStatus()))
+                .toList();
     }
 
     @SystemAuditLog(module = "resource-request", action = "submit")
@@ -61,9 +72,55 @@ public class ResourceRequestService {
             requests.add(request);
         }
 
-        updateIncidentResourceDispatchStatus(incidentId, "executing");
+        updateIncidentResourceDispatchStatus(incidentId, "shortage");
         logger.info("批量提交资源申请，incidentId: {}, 数量: {}", incidentId, items.size());
         return requests;
+    }
+
+    @SystemAuditLog(module = "resource-request", action = "approve")
+    @Transactional
+    public ResourceRequest approve(Long id) {
+        ResourceRequest request = resourceRequestRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("资源申请不存在，id: " + id));
+
+        if (!"pending".equals(request.getStatus())) {
+            throw new IllegalArgumentException("该申请已处理，状态: " + request.getStatus());
+        }
+
+        final String resourceIdStr = request.getResourceId();
+        EmergencyResource resource = resourceRepository.findByResourceId(resourceIdStr)
+                .orElseThrow(() -> new IllegalArgumentException("资源不存在: " + resourceIdStr));
+
+        int qty = request.getQuantity() != null ? request.getQuantity() : 0;
+        resource.setTotalStock((resource.getTotalStock() != null ? resource.getTotalStock() : 0) + qty);
+        resource.setAvailableStock((resource.getAvailableStock() != null ? resource.getAvailableStock() : 0) + qty);
+        resourceRepository.save(resource);
+
+        request.setStatus("approved");
+        request = resourceRequestRepository.save(request);
+
+        updateIncidentResourceDispatchStatus(request.getIncidentId(), "executing");
+        logger.info("资源申请已批准，id: {}, resourceId: {}, quantity: {}", id, resourceIdStr, qty);
+        return request;
+    }
+
+    @SystemAuditLog(module = "resource-request", action = "reject")
+    @Transactional
+    public ResourceRequest reject(Long id, String reason) {
+        ResourceRequest request = resourceRequestRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("资源申请不存在，id: " + id));
+
+        if (!"pending".equals(request.getStatus())) {
+            throw new IllegalArgumentException("该申请已处理，状态: " + request.getStatus());
+        }
+
+        request.setStatus("rejected");
+        request.setRemark(reason != null ? reason : "驳回");
+        request = resourceRequestRepository.save(request);
+
+        updateIncidentResourceDispatchStatus(request.getIncidentId(), "executing");
+        logger.info("资源申请已驳回，id: {}", id);
+        return request;
     }
 
     private void updateIncidentResourceDispatchStatus(String incidentId, String status) {

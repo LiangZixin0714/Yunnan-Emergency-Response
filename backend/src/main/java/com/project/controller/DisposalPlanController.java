@@ -7,6 +7,7 @@ import com.project.service.ExportService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -127,7 +128,7 @@ public class DisposalPlanController {
     }
 
     public static class RejectRequest {
-        @NotBlank(message = "id不能为空")
+        @NotNull(message = "id不能为空")
         private Long id;
         private String rejectReason;
         private String incidentId;

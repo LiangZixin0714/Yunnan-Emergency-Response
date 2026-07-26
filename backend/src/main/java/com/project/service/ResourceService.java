@@ -3,9 +3,11 @@ package com.project.service;
 import com.project.annotation.SystemAuditLog;
 import com.project.entity.mysql.EmergencyResource;
 import com.project.entity.mysql.Incident;
+import com.project.entity.mysql.Plan;
 import com.project.entity.mysql.ResourceDispatchRecord;
 import com.project.repository.mysql.EmergencyResourceRepository;
 import com.project.repository.mysql.IncidentRepository;
+import com.project.repository.mysql.PlanRepository;
 import com.project.repository.mysql.ResourceDispatchRecordRepository;
 import com.project.util.RedisLockUtil;
 import jakarta.persistence.EntityManager;
@@ -30,6 +32,7 @@ public class ResourceService {
     private final EmergencyResourceRepository resourceRepository;
     private final ResourceDispatchRecordRepository dispatchRecordRepository;
     private final IncidentRepository incidentRepository;
+    private final PlanRepository planRepository;
     private final RedisLockUtil redisLockUtil;
 
     @PersistenceContext(unitName = "mysql")
@@ -38,18 +41,23 @@ public class ResourceService {
     public ResourceService(EmergencyResourceRepository resourceRepository,
                           ResourceDispatchRecordRepository dispatchRecordRepository,
                           IncidentRepository incidentRepository,
+                          PlanRepository planRepository,
                           RedisLockUtil redisLockUtil) {
         this.resourceRepository = resourceRepository;
         this.dispatchRecordRepository = dispatchRecordRepository;
         this.incidentRepository = incidentRepository;
+        this.planRepository = planRepository;
         this.redisLockUtil = redisLockUtil;
     }
 
+    @Transactional(readOnly = true, transactionManager = "mysqlTransactionManager")
     public List<EmergencyResource> getAvailableResources() {
         return resourceRepository.findByAvailableStockGreaterThan(0);
     }
 
+    @Transactional(readOnly = true, transactionManager = "mysqlTransactionManager")
     public List<EmergencyResource> getAllResources() {
+        entityManager.clear();
         return resourceRepository.findAll();
     }
 
@@ -63,6 +71,15 @@ public class ResourceService {
         }
 
         try {
+            if (incidentId != null && !incidentId.isEmpty()) {
+                boolean incidentCompleted = incidentRepository.findByIncidentId(incidentId)
+                        .map(inc -> "completed".equals(inc.getStatus()))
+                        .orElse(false);
+                if (incidentCompleted) {
+                    throw new IllegalArgumentException("已结束的事件不可再调度资源");
+                }
+            }
+
             EmergencyResource resource = resourceRepository.findByResourceId(resourceId)
                     .orElseThrow(() -> new IllegalArgumentException("资源不存在"));
 
@@ -74,6 +91,12 @@ public class ResourceService {
             if (updated == 0) {
                 throw new RuntimeException("锁定资源失败");
             }
+
+            entityManager.flush();
+            entityManager.clear();
+
+            resource = resourceRepository.findByResourceId(resourceId)
+                    .orElseThrow(() -> new IllegalArgumentException("资源不存在"));
 
             ResourceDispatchRecord record = new ResourceDispatchRecord();
             record.setRecordId(UUID.randomUUID().toString());
@@ -91,8 +114,23 @@ public class ResourceService {
 
             dispatchRecordRepository.save(record);
 
+            if (incidentId != null && !incidentId.isEmpty()) {
+                incidentRepository.findByIncidentId(incidentId).ifPresent(incident -> {
+                    incident.setResourceDispatchStatus("completed");
+                    incident.setDisposalPlanStatus("accepted");
+                    incident.setStatus("completed");
+                    incidentRepository.save(incident);
+                });
+
+                List<Plan> plans = planRepository.findByIncidentId(incidentId);
+                for (Plan plan : plans) {
+                    plan.setStatus("accepted");
+                    plan.setRejectReason(null);
+                    planRepository.save(plan);
+                }
+            }
+
             entityManager.flush();
-            entityManager.refresh(resource);
             
             return Map.of(
                     "success", true,
@@ -127,6 +165,12 @@ public class ResourceService {
                 throw new RuntimeException("释放资源失败");
             }
 
+            entityManager.flush();
+            entityManager.clear();
+
+            resource = resourceRepository.findByResourceId(resourceId)
+                    .orElseThrow(() -> new IllegalArgumentException("资源不存在"));
+
             ResourceDispatchRecord record = new ResourceDispatchRecord();
             record.setRecordId(UUID.randomUUID().toString());
             record.setResourceId(resourceId);
@@ -142,7 +186,6 @@ public class ResourceService {
             dispatchRecordRepository.save(record);
 
             entityManager.flush();
-            entityManager.refresh(resource);
 
             return Map.of(
                     "success", true,
@@ -177,6 +220,12 @@ public class ResourceService {
                 throw new RuntimeException("分配资源失败");
             }
 
+            entityManager.flush();
+            entityManager.clear();
+
+            resource = resourceRepository.findByResourceId(resourceId)
+                    .orElseThrow(() -> new IllegalArgumentException("资源不存在"));
+
             ResourceDispatchRecord record = new ResourceDispatchRecord();
             record.setRecordId(UUID.randomUUID().toString());
             record.setResourceId(resourceId);
@@ -194,7 +243,6 @@ public class ResourceService {
             dispatchRecordRepository.save(record);
 
             entityManager.flush();
-            entityManager.refresh(resource);
 
             logger.info("资源分配出库成功，resourceId: {}, quantity: {}, incidentId: {}", resourceId, quantity, incidentId);
 
@@ -207,6 +255,59 @@ public class ResourceService {
         } finally {
             redisLockUtil.unlock(lockKey);
         }
+    }
+
+    @Transactional("mysqlTransactionManager")
+    public EmergencyResource createResource(EmergencyResource resource) {
+        return resourceRepository.save(resource);
+    }
+
+    @Transactional("mysqlTransactionManager")
+    public EmergencyResource updateResource(Long id, com.project.controller.ResourceController.UpdateResourceRequest request) {
+        EmergencyResource resource = resourceRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("资源不存在，id: " + id));
+
+        if (request.getResourceName() != null) {
+            resource.setResourceName(request.getResourceName());
+        }
+        if (request.getResourceType() != null) {
+            resource.setResourceType(request.getResourceType());
+        }
+        if (request.getUnit() != null) {
+            resource.setUnit(request.getUnit());
+        }
+        if (request.getTotalStock() != null) {
+            int delta = request.getTotalStock() - (resource.getTotalStock() != null ? resource.getTotalStock() : 0);
+            resource.setTotalStock(request.getTotalStock());
+            if (request.getAvailableStock() == null) {
+                resource.setAvailableStock((resource.getAvailableStock() != null ? resource.getAvailableStock() : 0) + delta);
+            }
+        }
+        if (request.getAvailableStock() != null) {
+            resource.setAvailableStock(request.getAvailableStock());
+        }
+        if (request.getLocation() != null) {
+            resource.setLocation(request.getLocation());
+        }
+        if (request.getDescription() != null) {
+            resource.setDescription(request.getDescription());
+        }
+        if (request.getStatus() != null) {
+            resource.setStatus(request.getStatus());
+        }
+
+        EmergencyResource saved = resourceRepository.save(resource);
+        entityManager.flush();
+        entityManager.refresh(saved);
+        return saved;
+    }
+
+    @Transactional("mysqlTransactionManager")
+    public void deleteResource(Long id) {
+        if (!resourceRepository.existsById(id)) {
+            throw new IllegalArgumentException("资源不存在，id: " + id);
+        }
+        resourceRepository.deleteById(id);
     }
 
     public List<ResourceDispatchRecord> getDispatchRecords(String resourceId, String incidentId) {

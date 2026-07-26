@@ -11,7 +11,12 @@ import uvicorn
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+_AI_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_AI_DIR)
+
+sys.path.insert(0, _ROOT_DIR)
+sys.path.insert(0, _AI_DIR)
 
 from utils.logger import setup_logger
 from agents.orchestrator import run_workflow, run_workflow_stream

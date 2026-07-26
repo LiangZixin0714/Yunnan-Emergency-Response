@@ -55,6 +55,13 @@ public class DisposalPlanService {
 
     @Transactional
     public Plan submit(Long id, String planContent, String incidentId, Long submittedBy) {
+        Incident incident = incidentRepository.findByIncidentId(incidentId)
+                .orElseThrow(() -> new IllegalArgumentException("事件不存在，incidentId: " + incidentId));
+        
+        if ("completed".equals(incident.getStatus())) {
+            throw new IllegalArgumentException("已结束的事件不可再提交处置方案");
+        }
+        
         Plan plan;
         if (id != null) {
             plan = planRepository.findById(id)

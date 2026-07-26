@@ -100,18 +100,18 @@ export interface ResourceRequest {
   id: number
   requestId: string
   incidentId: string
-  incidentName: string | null
   resourceId: string
   resourceName: string
+  resourceType: string | null
   quantity: number
+  unit: string | null
+  priority: string | null
+  destination: string | null
   status: string
-  requestedBy: number | null
-  requestedAt: string | null
-  handledBy: number | null
-  handledAt: string | null
-  handleResult: string | null
-  createdAt: string
-  updatedAt: string
+  remark: string | null
+  requesterId: number | null
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 export interface ResourceRequestItem {

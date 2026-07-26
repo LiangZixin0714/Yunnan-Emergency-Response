@@ -1,10 +1,9 @@
-"""pgvector 数据库操作模块，负责建表、插入和查询。"""
+"""数据库操作模块，负责建表、插入和查询（使用 double precision[] 替代 pgvector）。"""
 
 import json
 from typing import Any, Optional
 
 import psycopg2
-from psycopg2.extras import execute_values
 
 from utils.logger import get_logger
 from scripts.config import (
@@ -37,7 +36,7 @@ CREATE TABLE IF NOT EXISTS {table} (
     publish_org VARCHAR(255) NOT NULL,
     publish_date VARCHAR(20),
     version VARCHAR(50) NOT NULL,
-    embedding vector({dim}),
+    embedding double precision[],
     model_name VARCHAR(100) NOT NULL DEFAULT 'BAAI/bge-small-zh-v1.5',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -89,7 +88,6 @@ def ensure_table(conn) -> None:
         conn: psycopg2 连接对象。
     """
     cur = conn.cursor()
-    cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
     cur.execute(_CREATE_TABLE_SQL.format(table=PG_TABLE_NAME, dim=PG_VECTOR_DIM))
     for sql in _CREATE_INDEX_SQL.strip().split(";"):
         sql = sql.strip()
@@ -113,14 +111,13 @@ def insert_chunk(conn, chunk: dict[str, Any], embedding: list[float]) -> bool:
     """
     try:
         cur = conn.cursor()
-        embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
         cur.execute(
             f"""
             INSERT INTO {PG_TABLE_NAME}
                 (chunk_id, document_name, document_type, chapter, section,
                  page, content, length, "order", source, publish_org,
                  publish_date, version, embedding, model_name)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (chunk_id) DO NOTHING
             """,
             (
@@ -137,7 +134,7 @@ def insert_chunk(conn, chunk: dict[str, Any], embedding: list[float]) -> bool:
                 chunk.get("publish_org", "未知"),
                 chunk.get("publish_date"),
                 chunk.get("version", ""),
-                embedding_str,
+                embedding,
                 "BAAI/bge-small-zh-v1.5",
             ),
         )

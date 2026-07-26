@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlanStore } from '@/stores/plan'
 import { useIncidentStore } from '@/stores/incident'
@@ -23,6 +23,14 @@ const selectedPlanId = ref('')
 const editableContent = ref('')
 const editorRef = ref<HTMLDivElement | null>(null)
 let vditorInstance: Vditor | null = null
+
+const selectedIncident = computed(() => {
+  return incidentStore.incidentList.find((i) => i.incidentId === selectedIncidentId.value)
+})
+
+const isIncidentCompleted = computed(() => {
+  return selectedIncident.value?.status === 'completed'
+})
 
 const disposalPlanStatusMap = Object.fromEntries(
   Object.entries(DisposalPlanStatusLabel).map(([key, label]) => [
@@ -93,6 +101,10 @@ async function loadPlans(): Promise<void> {
 async function handleGenerate(): Promise<void> {
   if (!selectedIncidentId.value) {
     ElMessage.warning('请先选择灾情事件')
+    return
+  }
+  if (isIncidentCompleted.value) {
+    ElMessage.warning('已结束的事件不可再生成处置方案')
     return
   }
   editableContent.value = ''
@@ -234,13 +246,16 @@ async function handleSaveDraft(): Promise<void> {
 }
 
 async function handleSubmitDisposalPlan(): Promise<void> {
+  if (isIncidentCompleted.value) {
+    ElMessage.warning('已结束的事件不可再提交处置方案')
+    return
+  }
   const content = vditorInstance?.getValue() || editableContent.value
   if (!content.trim()) {
     ElMessage.warning('方案内容不能为空，请先拟定处置方案')
     return
   }
   
-  // 【关键修复】：必须取数字自增主键 id，而不是字符串 planId
   const targetId = planStore.currentPlan?.id
   if (!targetId) {
     ElMessage.warning('请先选择或生成一个有效的方案')
@@ -249,7 +264,7 @@ async function handleSubmitDisposalPlan(): Promise<void> {
 
   try {
     await disposalPlanStore.submitDisposalPlan(
-      targetId, // 传数字 Long id
+      targetId,
       content,
       selectedIncidentId.value
     )
@@ -379,8 +394,9 @@ watch(selectedIncidentId, (newVal) => {
             <el-option
               v-for="item in incidentStore.incidentList"
               :key="item.incidentId"
-              :label="item.incidentName"
+              :label="item.incidentName + (item.status === 'completed' ? ' (已结束)' : '')"
               :value="item.incidentId"
+              :disabled="item.status === 'completed'"
             />
           </el-select>
         </el-form-item>
@@ -388,6 +404,7 @@ watch(selectedIncidentId, (newVal) => {
           <el-button
             type="primary"
             :loading="planStore.streaming"
+            :disabled="isIncidentCompleted"
             @click="handleGenerate"
           >
             {{ planStore.streaming ? '生成中...' : '生成' }}
@@ -401,6 +418,15 @@ watch(selectedIncidentId, (newVal) => {
           </el-button>
         </el-form-item>
       </el-form>
+      <el-alert
+        v-if="isIncidentCompleted"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-top: 12px"
+      >
+        该事件已结束，不可再生成或提交处置方案
+      </el-alert>
     </el-card>
 
     <div class="plan-page__body" v-if="selectedIncidentId">
@@ -418,6 +444,7 @@ watch(selectedIncidentId, (newVal) => {
         >
           <div class="plan-page__item-title">{{ plan.planTitle }}</div>
           <div class="plan-page__item-meta">
+            <span>灾情：{{ plan.incidentId }}</span>
             <span>{{ plan.generateTime ? formatDate(plan.generateTime, 'YYYY-MM-DD HH:mm') : '-' }}</span>
             <el-tag size="small" :type="PlanStatusTagType[plan.status as PlanStatusValue] ?? 'info'">
               {{ PlanStatusLabel[plan.status as PlanStatusValue] ?? plan.status }}
@@ -472,6 +499,7 @@ watch(selectedIncidentId, (newVal) => {
           <template v-if="planStore.currentPlan">
             <h3>{{ planStore.currentPlan.planTitle }}</h3>
             <div class="plan-page__content-meta">
+              <span>灾情ID：{{ planStore.currentPlan.incidentId }}</span>
               <span>生成时间：{{ planStore.currentPlan.generateTime ? formatDate(planStore.currentPlan.generateTime) : '-' }}</span>
               <el-tag size="small" :type="PlanStatusTagType[planStore.currentPlan.status as PlanStatusValue] ?? 'info'">
                 {{ PlanStatusLabel[planStore.currentPlan.status as PlanStatusValue] }}

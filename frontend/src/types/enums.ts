@@ -166,15 +166,17 @@ export const DisposalPlanStatus = {
   SUBMITTED: 'submitted',
   ACCEPTED: 'accepted',
   REJECTED: 'rejected',
+  RESUBMITTED: 'resubmitted',
 } as const
 
 export type DisposalPlanStatusValue = (typeof DisposalPlanStatus)[keyof typeof DisposalPlanStatus]
 
 export const DisposalPlanStatusLabel: Record<DisposalPlanStatusValue, string> = {
   draft: '草稿',
-  submitted: '已提交',
-  accepted: '已接受',
+  submitted: '待审核',
+  accepted: '已通过',
   rejected: '已驳回',
+  resubmitted: '待审核',
 }
 
 export const DisposalPlanStatusTagType: Record<DisposalPlanStatusValue, string> = {
@@ -182,6 +184,7 @@ export const DisposalPlanStatusTagType: Record<DisposalPlanStatusValue, string> 
   submitted: 'warning',
   accepted: 'success',
   rejected: 'danger',
+  resubmitted: 'warning',
 }
 
 export const ResourceDispatchStatus = {

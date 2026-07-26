@@ -17,7 +17,7 @@ spring:
     postgres:
       jdbc-url: jdbc:postgresql://127.0.0.1:5432/emergency_vector
       username: postgres
-      password: postgres
+      password: ZAQ12wsx581!
       driver-class-name: org.postgresql.Driver
 
   jpa:
