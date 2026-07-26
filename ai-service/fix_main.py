@@ -1,4 +1,4 @@
-"""Emergency Platform AI Service - FastAPI Main Entry."""
+content = '''"""Emergency Platform AI Service - FastAPI Main Entry."""
 
 import os
 import json
@@ -92,11 +92,11 @@ async def generate_plan_stream(request: Request) -> StreamingResponse:
             try:
                 for chunk in run_workflow_stream(description, incident_id=incident_id):
                     if chunk:
-                        yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
-                yield 'data: {"done": true}\n\n'
+                        yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\\n\\n"
+                yield 'data: {"done": true}\\n\\n'
             except Exception as e:
                 logger.error(f"Stream failed: {e}")
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield f"data: {json.dumps({'error': str(e)})}\\n\\n"
 
         return StreamingResponse(
             stream_generator(),
@@ -119,3 +119,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8002))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+'''
+
+with open('main.py', 'w', encoding='utf-8') as f:
+    f.write(content)
+print('Fixed!')

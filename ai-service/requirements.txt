@@ -9,3 +9,6 @@ python-dotenv
 aiohttp
 pypdf
 httpx
+pymysql
+PyMuPDF
+minio

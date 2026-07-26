@@ -27,7 +27,14 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse<unknown> | Blob>) => {
-    if (response.data instanceof Blob) {
+    if (response.config.responseType === 'blob' && response.data instanceof Blob) {
+      if (response.data.type && !response.data.type.includes('octet-stream') && !response.data.type.includes('pdf')) {
+        return response.data.text().then(text => {
+          const res = JSON.parse(text) as ApiResponse<unknown>
+          ElMessage.error(res.message || '请求失败')
+          return Promise.reject(new Error(res.message || '请求失败'))
+        })
+      }
       return response.data
     }
     const res = response.data as ApiResponse<unknown>

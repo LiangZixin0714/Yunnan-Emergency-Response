@@ -12,6 +12,7 @@ import {
   type KnowledgeFile,
 } from '@/api/knowledge'
 import VectorizeStatusTag from './VectorizeStatusTag.vue'
+import { getStoredToken } from '@/utils/token'
 
 const fileList = ref<KnowledgeFile[]>([])
 const loading = ref(false)
@@ -89,15 +90,9 @@ async function handleUpload() {
 }
 
 function handleDownload(row: KnowledgeFile) {
-  const url = getKnowledgeDownloadUrl(row.fileId)
-  const token = sessionStorage.getItem('token')
-  const link = document.createElement('a')
-  link.href = url + (token ? `?token=${encodeURIComponent(token)}` : '')
-  link.target = '_blank'
-  link.download = row.fileName
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  const token = getStoredToken()
+  const url = `/api/knowledge/download/${row.fileId}` + (token ? `?token=${encodeURIComponent(token)}` : '')
+  window.open(url, '_blank')
 }
 
 async function handleDelete(row: KnowledgeFile) {

@@ -4,15 +4,56 @@ import os
 import sys
 import time
 import logging
+import importlib
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_AI_SERVICE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PROJECT_ROOT = os.path.dirname(_AI_SERVICE_DIR)
+
+sys.path.insert(0, _AI_SERVICE_DIR)
 
 from utils.minio_client import download_file
-from utils.pdf_parser import extract_text_from_pdf
-from utils.embedding import generate_embedding
-from utils.db import get_connection, ensure_table, insert_chunk
+
+_ai_service_utils = sys.modules.get('utils')
+
+
+def _import_root_utils():
+    saved_utils = {k: v for k, v in sys.modules.items() if k == 'utils' or k.startswith('utils.')}
+    for k in saved_utils:
+        sys.modules.pop(k, None)
+
+    if _AI_SERVICE_DIR in sys.path:
+        sys.path.remove(_AI_SERVICE_DIR)
+    sys.path.insert(0, _PROJECT_ROOT)
+
+    import utils.pdf_parser
+    import utils.embedding
+    import utils.db
+
+    pdf_parser = sys.modules['utils.pdf_parser']
+    embedding_mod = sys.modules['utils.embedding']
+    db_mod = sys.modules['utils.db']
+
+    root_utils = {k: v for k, v in sys.modules.items() if k == 'utils' or k.startswith('utils.')}
+    for k in root_utils:
+        sys.modules.pop(k, None)
+
+    sys.path.remove(_PROJECT_ROOT)
+    sys.path.insert(0, _AI_SERVICE_DIR)
+
+    for k, v in saved_utils.items():
+        sys.modules[k] = v
+
+    return pdf_parser, embedding_mod, db_mod
+
+
+_pdf_parser, _embedding_mod, _db_mod = _import_root_utils()
+
+extract_text_from_pdf = _pdf_parser.extract_text_from_pdf
+generate_embedding = _embedding_mod.generate_embedding
+get_connection = _db_mod.get_connection
+ensure_table = _db_mod.ensure_table
+insert_chunk = _db_mod.insert_chunk
 
 logger = logging.getLogger("ai-service")
 

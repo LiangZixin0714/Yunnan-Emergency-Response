@@ -6,7 +6,9 @@ com\project\controller\DisposalPlanController$SaveDraftRequest.class
 com\project\config\SecurityConfig.class
 com\project\repository\mysql\IncidentRepository.class
 com\project\config\PgVectorType.class
+com\project\entity\mysql\Knowledge.class
 com\project\dto\ai\EmergencyPlanDTO.class
+com\project\service\VectorizeRetryScheduler.class
 com\project\common\Result.class
 com\project\entity\mysql\Citation.class
 com\project\service\AuthService.class
@@ -29,11 +31,13 @@ com\project\dto\ai\CitationItem.class
 com\project\config\DataInitializer$UserData.class
 com\project\config\FeignConfig.class
 com\project\controller\IncidentController.class
+com\project\service\KnowledgeService$1.class
 com\project\repository\mysql\UserRepository.class
 com\project\controller\ResourceController$ReleaseResourceRequest.class
 com\project\controller\ResourceRequestController.class
 com\project\repository\mysql\ResourceDispatchRecordRepository.class
 com\project\service\AiDecisionServiceMockImpl.class
+com\project\service\VectorizeService.class
 com\project\service\ResourceRequestService.class
 com\project\service\DisposalPlanService.class
 com\project\controller\ImageController.class
@@ -60,9 +64,11 @@ com\project\entity\mysql\AuditLog.class
 com\project\service\AuditLogService.class
 com\project\annotation\SystemAuditLog.class
 com\project\repository\mysql\DispatchOrderRepository.class
+com\project\repository\mysql\KnowledgeRepository.class
 com\project\repository\mysql\CitationRepository.class
 com\project\filter\JwtAuthenticationFilter.class
 com\project\repository\mysql\AgentRunRepository.class
+com\project\controller\KnowledgeController.class
 com\project\service\LocationService.class
 com\project\util\RedisLockUtil.class
 com\project\util\JwtUtil.class
@@ -74,7 +80,9 @@ com\project\controller\ResourceController$AllocateResourceRequest.class
 com\project\repository\mysql\PlanRepository.class
 com\project\dto\ai\PageResult.class
 com\project\dto\ai\AnalyzeRequest.class
+com\project\config\RestTemplateConfig.class
 com\project\controller\PlanController.class
+com\project\service\KnowledgeService.class
 com\project\config\DataInitializer.class
 com\project\entity\mysql\ResourceDispatchRecord.class
 com\project\repository\mysql\AuditLogRepository.class
@@ -94,4 +102,5 @@ com\project\controller\AuthController.class
 com\project\dto\incident\IncidentReportResponse.class
 com\project\dto\incident\IncidentReportRequest.class
 com\project\entity\mysql\DispatchOrder.class
+com\project\config\AiServiceConfig.class
 com\project\repository\mysql\IncidentReportRepository.class

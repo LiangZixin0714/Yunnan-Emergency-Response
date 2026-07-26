@@ -12,6 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationAdapter;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -95,7 +97,15 @@ public class KnowledgeService {
 
             logger.info("Knowledge file uploaded: {} -> {}", originalFilename, objectKey);
 
-            vectorizeService.triggerVectorizeAsync(knowledge.getFileId());
+            String uploadedFileId = knowledge.getFileId();
+            TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronizationAdapter() {
+                    @Override
+                    public void afterCommit() {
+                        vectorizeService.triggerVectorizeAsync(uploadedFileId);
+                    }
+                }
+            );
 
             return knowledge;
 

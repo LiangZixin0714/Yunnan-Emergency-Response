@@ -93,10 +93,10 @@ public class VectorizeService {
 
     public boolean deleteVectors(String fileName) {
         try {
-            String url = aiServiceConfig.getUrl() + "/api/v1/knowledge/vectors";
+            String url = aiServiceConfig.getUrl() + "/api/v1/knowledge/vectors/delete";
             Map<String, Object> requestBody = Map.of("sourceFile", fileName);
 
-            restTemplate.delete(url, requestBody);
+            restTemplate.postForObject(url, requestBody, Map.class);
             logger.info("向量删除请求成功: fileName={}", fileName);
             return true;
         } catch (Exception e) {
