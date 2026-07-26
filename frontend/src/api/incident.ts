@@ -15,3 +15,7 @@ export function reportIncident(data: IncidentReportData): Promise<ApiResponse<In
   const formData = buildIncidentFormData(data)
   return request.post('/incident/report', formData)
 }
+
+export function completeIncident(incidentId: string): Promise<ApiResponse<Incident>> {
+  return request.post('/incident/complete', null, { params: { incidentId } })
+}

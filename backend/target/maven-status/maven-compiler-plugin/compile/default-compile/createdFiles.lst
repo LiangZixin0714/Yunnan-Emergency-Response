@@ -26,11 +26,11 @@ com/project/repository/mysql/UserRepository.class
 com/project/util/JwtUtil.class
 com/project/config/PgVectorType.class
 com/project/entity/mysql/User.class
-com/project/entity/mysql/DispatchOrder.class
 com/project/controller/AuthController.class
 com/project/config/AiServiceConfig.class
 com/project/service/ExportService.class
 com/project/common/GlobalExceptionHandler.class
+com/project/config/AmapRestTemplateConfig.class
 com/project/repository/postgres/LocationRepository.class
 com/project/service/PlanService.class
 com/project/entity/postgres/EmergencyPlan.class
@@ -46,7 +46,6 @@ com/project/controller/ResourceController$LockResourceRequest.class
 com/project/service/ResourceService.class
 com/project/service/VectorizeService.class
 com/project/dto/ai/AnalyzeResponse.class
-com/project/entity/mysql/IncidentReport.class
 com/project/controller/ResourceController$AllocateResourceRequest.class
 com/project/controller/PlanController$ReviewPlanRequest.class
 com/project/annotation/SystemAuditLog.class
@@ -63,7 +62,6 @@ com/project/config/DataInitializer.class
 com/project/service/DisposalPlanService.class
 com/project/config/FeignConfig.class
 com/project/aspect/AuditLogAspect.class
-com/project/repository/mysql/DataSourceRepository.class
 com/project/service/LocationService.class
 com/project/controller/KnowledgeController.class
 com/project/controller/ResourceController.class
@@ -72,10 +70,10 @@ com/project/service/IncidentService.class
 com/project/controller/PlanController$GeneratePlanRequest.class
 com/project/dto/ai/PageResult.class
 com/project/repository/mysql/IncidentRepository.class
+com/project/config/AmapConfig.class
 com/project/client/AiServiceClient.class
 com/project/service/ResourceRequestService.class
 com/project/service/DashboardService.class
-com/project/entity/mysql/DataSourceEntity.class
 com/project/entity/mysql/Plan.class
 com/project/service/MemberService.class
 com/project/config/SecurityConfig.class
@@ -86,6 +84,7 @@ com/project/dto/incident/IncidentReportResponse.class
 com/project/controller/ResourceController$CreateResourceRequest.class
 com/project/controller/ResourceController$UpdateResourceRequest.class
 com/project/dto/incident/IncidentRequest.class
+com/project/service/AmapGeocodeService.class
 com/project/repository/mysql/ResourceRequestRepository.class
 com/project/controller/ResourceRequestController.class
 com/project/entity/mysql/AuditLog.class
@@ -99,9 +98,7 @@ com/project/config/DataInitializer$UserData.class
 com/project/service/ResourceRequestService$ResourceRequestItem.class
 com/project/entity/mysql/EmergencyResource.class
 com/project/entity/mysql/Incident.class
-com/project/repository/mysql/DispatchOrderRepository.class
 com/project/config/WebMvcConfig.class
-com/project/repository/mysql/IncidentReportRepository.class
 com/project/controller/DisposalPlanController$SubmitRequest.class
 com/project/controller/ResourceController$ReleaseResourceRequest.class
 com/project/dto/ai/AgentRunLogRequest.class

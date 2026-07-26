@@ -51,7 +51,7 @@ public class DisposalPlanController {
     }
 
     @PostMapping("/submit")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize("hasAnyRole('OPERATOR')")
     public ResponseEntity<Result<Plan>> submit(@Valid @RequestBody SubmitRequest request) {
         Plan plan = disposalPlanService.submit(
                 request.getId(),
@@ -63,7 +63,7 @@ public class DisposalPlanController {
     }
 
     @PostMapping("/reject")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER')")
     public ResponseEntity<Result<Plan>> reject(@Valid @RequestBody RejectRequest request) {
         Plan plan = disposalPlanService.reject(
                 request.getId(),

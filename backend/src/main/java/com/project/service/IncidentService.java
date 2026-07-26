@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -41,13 +42,16 @@ public class IncidentService {
     private final ObjectMapper objectMapper;
     private final MinioClient minioClient;
     private final MinIOConfig minIOConfig;
+    private final AmapGeocodeService amapGeocodeService;
 
     public IncidentService(IncidentRepository incidentRepository, ObjectMapper objectMapper,
-                          MinioClient minioClient, MinIOConfig minIOConfig) {
+                          MinioClient minioClient, MinIOConfig minIOConfig,
+                          AmapGeocodeService amapGeocodeService) {
         this.incidentRepository = incidentRepository;
         this.objectMapper = objectMapper;
         this.minioClient = minioClient;
         this.minIOConfig = minIOConfig;
+        this.amapGeocodeService = amapGeocodeService;
     }
 
     @Transactional("mysqlTransactionManager")
@@ -74,8 +78,23 @@ public class IncidentService {
         incident.setDescription(request.getDescription());
         incident.setDeathCount(request.getDeathCount());
         incident.setPropertyLoss(request.getPropertyLoss());
-        incident.setStatus("pending");
+        incident.setStatus("processing");
         incident.setReporterId(reporterId);
+
+        if (request.getLatitude() != null && request.getLongitude() != null) {
+            incident.setLatitude(BigDecimal.valueOf(request.getLatitude()));
+            incident.setLongitude(BigDecimal.valueOf(request.getLongitude()));
+        } else if (request.getLocation() != null && !request.getLocation().trim().isEmpty()) {
+            try {
+                double[] coords = amapGeocodeService.geocode(request.getLocation());
+                if (coords != null) {
+                    incident.setLatitude(BigDecimal.valueOf(coords[0]));
+                    incident.setLongitude(BigDecimal.valueOf(coords[1]));
+                }
+            } catch (Exception e) {
+                logger.warn("地理编码失败，不影响上报流程: location={}", request.getLocation(), e);
+            }
+        }
 
         List<String> imageUrls = new ArrayList<>();
         if (request.getImages() != null && request.getImages().length > 0) {
@@ -129,6 +148,26 @@ public class IncidentService {
         Incident incident = incidentRepository.findByIncidentId(incidentId)
                 .orElseThrow(() -> new IllegalArgumentException("灾情不存在，incidentId: " + incidentId));
         incident.setResourceDispatchStatus("completed");
+        return incidentRepository.save(incident);
+    }
+
+    @Transactional("mysqlTransactionManager")
+    public Incident completeIncident(String incidentId) {
+        Incident incident = incidentRepository.findByIncidentId(incidentId)
+                .orElseThrow(() -> new IllegalArgumentException("灾情不存在，incidentId: " + incidentId));
+
+        if ("completed".equals(incident.getStatus())) {
+            throw new IllegalStateException("事件已结束");
+        }
+
+        String disposalStatus = incident.getDisposalPlanStatus();
+        if (!"accepted".equals(disposalStatus)) {
+            throw new IllegalStateException(
+                    "无法结束灾情：处置方案尚未被接受（当前状态: " + disposalStatus + "）");
+        }
+
+        incident.setResourceDispatchStatus("completed");
+        incident.setStatus("completed");
         return incidentRepository.save(incident);
     }
 
@@ -248,7 +287,7 @@ public class IncidentService {
         incident.setIncidentName(request.getTitle());
         incident.setDisasterType(request.getIncidentType());
         incident.setDescription(request.getDescription());
-        incident.setStatus("pending");
+        incident.setStatus("processing");
         incident.setReporterId(reporterId);
 
         incidentRepository.save(incident);
@@ -263,5 +302,49 @@ public class IncidentService {
         response.setCreatedAt(incident.getCreatedAt());
 
         return response;
+    }
+
+    @Transactional("mysqlTransactionManager")
+    public Map<String, Object> backfillCoordinates() {
+        List<Incident> allIncidents = incidentRepository.findAll();
+        int total = 0;
+        int updated = 0;
+        int failed = 0;
+
+        for (Incident incident : allIncidents) {
+            if (incident.getLatitude() != null && incident.getLongitude() != null) {
+                continue;
+            }
+            if (incident.getLocation() == null || incident.getLocation().trim().isEmpty()) {
+                continue;
+            }
+
+            total++;
+            try {
+                double[] coords = amapGeocodeService.geocode(incident.getLocation());
+                if (coords != null) {
+                    incident.setLatitude(BigDecimal.valueOf(coords[0]));
+                    incident.setLongitude(BigDecimal.valueOf(coords[1]));
+                    incidentRepository.save(incident);
+                    updated++;
+                    logger.info("补全坐标成功: incidentId={}, location={}, lat={}, lng={}",
+                            incident.getIncidentId(), incident.getLocation(), coords[0], coords[1]);
+                } else {
+                    failed++;
+                    logger.warn("补全坐标失败（无结果）: incidentId={}, location={}",
+                            incident.getIncidentId(), incident.getLocation());
+                }
+            } catch (Exception e) {
+                failed++;
+                logger.error("补全坐标异常: incidentId={}, location={}",
+                        incident.getIncidentId(), incident.getLocation(), e);
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("total", total);
+        result.put("updated", updated);
+        result.put("failed", failed);
+        return result;
     }
 }

@@ -10,10 +10,8 @@ import ResourceSearchItem from '@/components/ResourceSearchItem.vue'
 import {
   DisasterTypeLabel,
   IncidentLevelLabel,
-  DisposalPlanStatusLabel,
-  DisposalPlanStatusTagType,
 } from '@/types/enums'
-import type { DisasterTypeValue, IncidentLevelValue, DisposalPlanStatusValue } from '@/types/enums'
+import type { DisasterTypeValue, IncidentLevelValue } from '@/types/enums'
 import { formatDate } from '@/utils/format'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -23,6 +21,12 @@ interface SearchItem {
   increaseQuantity: number
 }
 
+interface DispatchItem {
+  id: number
+  resourceId: string
+  quantity: number
+}
+
 const route = useRoute()
 const router = useRouter()
 const incidentStore = useIncidentStore()
@@ -30,25 +34,41 @@ const authStore = useAuthStore()
 const disposalPlanStore = useDisposalPlanStore()
 const resourceStore = useResourceStore()
 
-const dispatchQuantity = ref<number>(0)
-const selectedResourceId = ref('')
+const dispatchItems = ref<DispatchItem[]>([{ id: 1, resourceId: '', quantity: 1 }])
+let dispatchItemIdCounter = 1
 
 const statusMap: Record<string, { label: string; type: string }> = {
+  pending: { label: '处置中', type: 'warning' },
   processing: { label: '处置中', type: 'warning' },
   completed: { label: '已结束', type: 'success' },
 }
 
-const disposalPlanStatusMap = Object.fromEntries(
-  Object.entries(DisposalPlanStatusLabel).map(([key, label]) => [
-    key,
-    { label, type: DisposalPlanStatusTagType[key as DisposalPlanStatusValue] },
-  ])
-)
+const unifiedStatusMap: Record<string, { label: string; type: string }> = {
+  pending_review: { label: '待审核', type: 'warning' },
+  requesting_resource: { label: '申请资源中', type: 'info' },
+  rejected: { label: '已驳回', type: 'danger' },
+  completed: { label: '已完成', type: 'success' },
+  no_plan: { label: '待拟方案', type: 'info' },
+  dispatch_done: { label: '调度完成', type: 'success' },
+}
+
+function getUnifiedStatus(): string {
+  const inc = incidentStore.currentIncident
+  if (!inc) return 'no_plan'
+  if (inc.status === 'completed') return 'completed'
+  if (inc.disposalPlanStatus === 'rejected') return 'rejected'
+  if (!inc.disposalPlanStatus || inc.disposalPlanStatus === 'draft') return 'no_plan'
+  if (inc.disposalPlanStatus === 'submitted' || inc.disposalPlanStatus === 'resubmitted') return 'pending_review'
+  if (inc.disposalPlanStatus === 'accepted' && inc.resourceDispatchStatus === 'shortage') return 'requesting_resource'
+  if (inc.resourceDispatchStatus === 'executing' || inc.resourceDispatchStatus === 'completed') return 'dispatch_done'
+  if (inc.disposalPlanStatus === 'accepted') return 'pending_review'
+  return 'no_plan'
+}
 
 const incidentId = route.params.id as string
 const isShortageMode = computed(() => {
   const inc = incidentStore.currentIncident
-  return route.query.mode === 'shortage' && authStore.roleName === 'ADMIN' && inc?.status === 'processing' && (inc?.disposalPlanStatus === 'submitted' || inc?.disposalPlanStatus === 'resubmitted') && inc?.resourceDispatchStatus === 'shortage'
+  return route.query.mode === 'shortage' && authStore.roleName === 'RESOURCE_MANAGER' && inc?.status === 'processing' && (inc?.disposalPlanStatus === 'submitted' || inc?.disposalPlanStatus === 'resubmitted') && inc?.resourceDispatchStatus === 'shortage'
 })
 
 const searchItems = ref<SearchItem[]>([{ id: 1, selectedResourceId: '', increaseQuantity: 0 }])
@@ -79,7 +99,7 @@ const canDispatchResource = computed(() => {
   const role = authStore.roleName
   const status = incidentStore.currentIncident?.status
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return (role === 'RESOURCE_MANAGER' || role === 'ADMIN') && status !== 'completed' && dpStatus !== 'rejected'
+  return role === 'RESOURCE_MANAGER' && status !== 'completed' && (dpStatus === 'submitted' || dpStatus === 'resubmitted' || dpStatus === 'accepted')
 })
 
 const canRejectPlan = computed(() => {
@@ -88,10 +108,17 @@ const canRejectPlan = computed(() => {
   return (role === 'RESOURCE_MANAGER' || role === 'ADMIN') && dpStatus === 'submitted'
 })
 
-const canShowRejectedTip = computed(() => {
+const canCompleteIncident = computed(() => {
   const role = authStore.roleName
+  const status = incidentStore.currentIncident?.status
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return (role === 'RESOURCE_MANAGER' || role === 'ADMIN') && dpStatus === 'rejected'
+  const rdStatus = incidentStore.currentIncident?.resourceDispatchStatus
+  return (role === 'RESOURCE_MANAGER' || role === 'ADMIN') && status === 'processing' && dpStatus === 'accepted' && (rdStatus === 'executing' || rdStatus === 'completed')
+})
+
+const canShowRejectedTip = computed(() => {
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  return dpStatus === 'rejected'
 })
 
 const canShowResourceRequestTip = computed(() => {
@@ -280,34 +307,72 @@ function handleRequestResource(): void {
   router.push(`/resource-request/${incidentId}`)
 }
 
+function addDispatchItem(): void {
+  dispatchItemIdCounter++
+  dispatchItems.value.push({ id: dispatchItemIdCounter, resourceId: '', quantity: 1 })
+}
+
+function removeDispatchItem(id: number): void {
+  if (dispatchItems.value.length <= 1) return
+  dispatchItems.value = dispatchItems.value.filter((item) => item.id !== id)
+}
+
 async function handleDispatchResource(): Promise<void> {
-  if (!selectedResourceId.value || dispatchQuantity.value <= 0) {
-    ElMessage.warning('请选择资源并输入分配数量')
+  const validItems = dispatchItems.value.filter((item) => item.resourceId && item.quantity > 0)
+  if (validItems.length === 0) {
+    ElMessage.warning('请至少选择一个资源并输入分配数量')
     return
   }
-  const res = resourceStore.resourceList.find((r) => r.resourceId === selectedResourceId.value)
-  if (!res) return
-  const currentAvailable = res.availableStock ?? 0
-  if (currentAvailable < dispatchQuantity.value) {
-    ElMessage.warning(`该资源可用库存不足，当前剩余: ${currentAvailable}`)
-    return
-  }
-  try {
-    const result = await resourceStore.lockResource({
-      resourceId: selectedResourceId.value,
-      quantity: dispatchQuantity.value,
-      incidentId: incidentId as string,
-      remark: '资源调度分配',
-    })
-    if (result) {
-      ElMessage.success('资源调度成功！事件已处理完成。')
-      selectedResourceId.value = ''
-      dispatchQuantity.value = 0
-      await incidentStore.fetchDetail(incidentId)
-      await resourceStore.fetchList()
+
+  for (const item of validItems) {
+    const res = resourceStore.resourceList.find((r) => r.resourceId === item.resourceId)
+    if (!res) {
+      ElMessage.error(`资源 ${item.resourceId} 不存在`)
+      return
     }
+    const currentAvailable = res.availableStock ?? 0
+    if (currentAvailable < item.quantity) {
+      ElMessage.warning(`资源「${res.resourceName}」可用库存不足，当前剩余: ${currentAvailable}`)
+      return
+    }
+  }
+
+  let successCount = 0
+  for (const item of validItems) {
+    try {
+      const result = await resourceStore.lockResource({
+        resourceId: item.resourceId,
+        quantity: item.quantity,
+        incidentId: incidentId as string,
+        remark: '资源调度分配',
+      })
+      if (result) successCount++
+    } catch {
+      ElMessage.error(`资源调度失败: ${item.resourceId}`)
+      break
+    }
+  }
+
+  if (successCount > 0) {
+    ElMessage.success(`资源调度成功！共调度 ${successCount} 个资源。`)
+    dispatchItems.value = [{ id: 1, resourceId: '', quantity: 1 }]
+    dispatchItemIdCounter = 1
+    await incidentStore.fetchDetail(incidentId)
+    await resourceStore.fetchList()
+  }
+}
+
+async function handleCompleteIncident(): Promise<void> {
+  try {
+    await ElMessageBox.confirm('确认结束本次处置？结束后事件状态将变为"已结束"。', '结束处置', {
+      confirmButtonText: '确认结束',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await incidentStore.completeIncidentAction(incidentId)
+    ElMessage.success('处置已结束')
   } catch {
-    ElMessage.error('提交调度失败')
+    return
   }
 }
 
@@ -348,6 +413,9 @@ onMounted(async () => {
           <el-descriptions-item label="状态">
             <StatusTag :status="incidentStore.currentIncident.status" :status-map="statusMap" />
           </el-descriptions-item>
+          <el-descriptions-item label="处置进度">
+            <StatusTag :status="getUnifiedStatus()" :status-map="unifiedStatusMap" />
+          </el-descriptions-item>
           <el-descriptions-item label="发生时间">
             {{ incidentStore.currentIncident.occurTime ? formatDate(incidentStore.currentIncident.occurTime) : '-' }}
           </el-descriptions-item>
@@ -384,8 +452,8 @@ onMounted(async () => {
             <div class="incident-detail__disposal-plan-header">
               <span>处置方案</span>
               <StatusTag
-                :status="incidentStore.currentIncident.disposalPlanStatus!"
-                :status-map="disposalPlanStatusMap"
+                :status="getUnifiedStatus()"
+                :status-map="unifiedStatusMap"
               />
             </div>
           </template>
@@ -455,29 +523,45 @@ onMounted(async () => {
               <span v-if="canShowResourceRequestTip" style="color:#F56C6C;font-size:13px">已提交资源申请，等待审批</span>
             </div>
           </template>
-          <el-form inline>
-            <el-form-item label="选择资源">
-              <el-select v-model="selectedResourceId" placeholder="请选择资源" style="width: 280px">
+          <div class="incident-detail__dispatch-list">
+            <div
+              v-for="item in dispatchItems"
+              :key="item.id"
+              class="incident-detail__dispatch-row"
+            >
+              <el-select v-model="item.resourceId" placeholder="选择资源" style="width: 320px">
                 <el-option
                   v-for="res in resourceStore.resourceList"
                   :key="res.resourceId"
-                  :label="`${res.resourceName}（总库存${res.totalStock}，已调度${res.lockedStock ?? 0}，剩余${res.availableStock ?? 0}）`"
+                  :label="`${res.resourceName}（总${res.totalStock}，已调度${res.lockedStock ?? 0}，剩${res.availableStock ?? 0}）`"
                   :value="res.resourceId"
                 />
               </el-select>
-            </el-form-item>
-            <el-form-item label="分配数量">
-              <el-input-number v-model="dispatchQuantity" :min="1" :step="1" :precision="0" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="handleDispatchResource">提交调度</el-button>
-              <el-button type="primary" plain @click="handleRequestResource">请求资源</el-button>
-            </el-form-item>
-          </el-form>
+              <el-input-number v-model="item.quantity" :min="1" :step="1" :precision="0" style="margin-left: 12px" />
+              <el-button
+                v-if="dispatchItems.length > 1"
+                type="danger"
+                link
+                style="margin-left: 12px"
+                @click="removeDispatchItem(item.id)"
+              >删除</el-button>
+            </div>
+          </div>
+          <div style="margin-top: 8px">
+            <el-button type="primary" plain @click="addDispatchItem">+ 添加资源</el-button>
+          </div>
+          <div style="margin-top: 16px; display: flex; gap: 8px">
+            <el-button type="primary" @click="handleDispatchResource">提交调度</el-button>
+            <el-button type="primary" plain @click="handleRequestResource">请求资源</el-button>
+          </div>
         </el-card>
 
         <div class="incident-detail__actions" v-if="canRejectPlan">
           <el-button type="danger" @click="handleRejectPlan">驳回方案</el-button>
+        </div>
+
+        <div class="incident-detail__actions" v-if="canCompleteIncident">
+          <el-button type="success" @click="handleCompleteIncident">处置结束</el-button>
         </div>
 
         <el-alert
@@ -621,6 +705,17 @@ onMounted(async () => {
 
 .incident-detail__dispatch {
   margin-top: var(--spacing-md);
+}
+
+.incident-detail__dispatch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.incident-detail__dispatch-row {
+  display: flex;
+  align-items: center;
 }
 
 .incident-detail__rejected-tip {

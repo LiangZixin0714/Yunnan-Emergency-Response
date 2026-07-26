@@ -118,7 +118,8 @@ public class ResourceRequestService {
         request.setRemark(reason != null ? reason : "驳回");
         request = resourceRequestRepository.save(request);
 
-        updateIncidentResourceDispatchStatus(request.getIncidentId(), "executing");
+        updateIncidentDisposalPlanStatus(request.getIncidentId(), "rejected");
+        updateIncidentResourceDispatchStatus(request.getIncidentId(), "shortage");
         logger.info("资源申请已驳回，id: {}", id);
         return request;
     }
@@ -129,6 +130,15 @@ public class ResourceRequestService {
             incident.setResourceDispatchStatus(status);
             incidentRepository.save(incident);
             logger.debug("更新灾情资源调度状态，incidentId: {}, status: {}", incidentId, status);
+        }
+    }
+
+    private void updateIncidentDisposalPlanStatus(String incidentId, String status) {
+        Incident incident = incidentRepository.findByIncidentId(incidentId).orElse(null);
+        if (incident != null) {
+            incident.setDisposalPlanStatus(status);
+            incidentRepository.save(incident);
+            logger.debug("更新灾情处置方案状态，incidentId: {}, status: {}", incidentId, status);
         }
     }
 

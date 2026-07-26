@@ -242,8 +242,22 @@ export function mockPlugin() {
         }
         if (url === '/api/dashboard/screen') {
           const today = new Date().toISOString().slice(0, 10)
-          const mapIncidents = mockIncidents.filter((i) => i.status === 'processing').map((i) => ({ incidentId: i.incidentId, incidentName: i.incidentName, disasterType: i.disasterType, incidentLevel: i.incidentLevel, status: i.status, latitude: i.latitude, longitude: i.longitude, occurTime: i.occurTime ?? '', affectedCount: (i as Record<string, unknown>).deathCount ? Number((i as Record<string, unknown>).deathCount) : randomInt(0, 500) }))
-          res.end(JSON.stringify(success({ statistics: { todayCount: mockIncidents.filter((i) => (i.occurTime as string)?.slice(0, 10) === today).length, activeCount: mockIncidents.filter((i) => i.status === 'processing').length, completedCount: mockIncidents.filter((i) => i.status === 'completed').length }, incidents: mockIncidents.slice(0, 10), resources: mockResources.slice(0, 20), mapIncidents }))); return
+          const mapIncidents = mockIncidents.map((i) => ({
+            incidentId: i.incidentId,
+            incidentName: i.incidentName,
+            disasterType: i.disasterType,
+            incidentLevel: i.incidentLevel,
+            status: i.status,
+            latitude: i.latitude,
+            longitude: i.longitude,
+            occurTime: i.occurTime ?? '',
+            location: i.location ?? '',
+            disposalPlanStatus: (i as Record<string, unknown>).disposalPlanStatus ?? null,
+            resourceDispatchStatus: (i as Record<string, unknown>).resourceDispatchStatus ?? null,
+            deathCount: (i as Record<string, unknown>).deathCount ?? 0,
+            propertyLoss: (i as Record<string, unknown>).propertyLoss ?? 0,
+          }))
+          res.end(JSON.stringify(success({ statistics: { todayCount: mockIncidents.filter((i) => (i.occurTime as string)?.slice(0, 10) === today).length, activeCount: mockIncidents.filter((i) => i.status === 'processing' || i.status === 'confirmed').length, completedCount: mockIncidents.filter((i) => i.status === 'completed').length }, incidents: mockIncidents.slice(0, 10), resources: mockResources.slice(0, 20), mapIncidents }))); return
         }
 
         if (url === '/api/incident/list') {

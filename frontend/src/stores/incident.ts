@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Incident } from '@/types/incident'
 import type { IncidentListParams, IncidentReportData, IncidentReportResult } from '@/types/incident'
-import { getIncidentList, getIncidentDetail, reportIncident } from '@/api/incident'
+import { getIncidentList, getIncidentDetail, reportIncident, completeIncident as completeIncidentApi } from '@/api/incident'
 
 export const useIncidentStore = defineStore('incident', () => {
   const incidentList = ref<Incident[]>([])
@@ -36,6 +36,16 @@ export const useIncidentStore = defineStore('incident', () => {
     return res
   }
 
+  async function completeIncidentAction(id: string): Promise<void> {
+    loading.value = true
+    try {
+      const res = await completeIncidentApi(id) as unknown as Incident
+      currentIncident.value = res
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     incidentList,
     currentIncident,
@@ -44,5 +54,6 @@ export const useIncidentStore = defineStore('incident', () => {
     fetchList,
     fetchDetail,
     report,
+    completeIncidentAction,
   }
 })

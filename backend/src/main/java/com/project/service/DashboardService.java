@@ -103,7 +103,7 @@ public class DashboardService {
         List<EmergencyResource> resources = resourceRepository.findAll();
         screen.put("resources", resources);
 
-        List<Incident> mapIncidents = incidentRepository.findActiveIncidents();
+        List<Incident> mapIncidents = incidentRepository.findWithCoordinates();
         screen.put("mapIncidents", mapIncidents);
 
         return screen;

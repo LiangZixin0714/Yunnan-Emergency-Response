@@ -75,3 +75,9 @@ ai-service:
   api-key: emergency-platform-ai-service-key-2024
   connect-timeout: 5000
   read-timeout: 600000
+
+amap:
+  api-key: 2194d39fed9905e8cd5779f046a84fe1
+  geocode-url: https://restapi.amap.com/v3/geocode/geo
+  connect-timeout: 3000
+  read-timeout: 5000

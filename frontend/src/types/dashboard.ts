@@ -24,10 +24,14 @@ export interface MapIncident {
   disasterType: DisasterTypeValue
   incidentLevel: IncidentLevelValue
   status: IncidentStatusValue
-  latitude: number
-  longitude: number
-  occurTime: string
-  affectedCount: number
+  latitude: number | null
+  longitude: number | null
+  occurTime?: string | null
+  location?: string | null
+  disposalPlanStatus?: string | null
+  resourceDispatchStatus?: string | null
+  deathCount?: number | null
+  propertyLoss?: number | null
 }
 
 export interface ScreenData {

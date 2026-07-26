@@ -5,6 +5,8 @@
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/common/GlobalExceptionHandler.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/common/Result.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/config/AiServiceConfig.java
+/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/config/AmapConfig.java
+/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/config/AmapRestTemplateConfig.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/config/DataInitializer.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/config/FeignConfig.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/config/MinIOConfig.java
@@ -43,11 +45,8 @@
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/AgentRun.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/AuditLog.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/Citation.java
-/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/DataSourceEntity.java
-/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/DispatchOrder.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/EmergencyResource.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/Incident.java
-/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/IncidentReport.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/Knowledge.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/Plan.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/entity/mysql/ResourceDispatchRecord.java
@@ -61,10 +60,7 @@
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/AgentRunRepository.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/AuditLogRepository.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/CitationRepository.java
-/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/DataSourceRepository.java
-/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/DispatchOrderRepository.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/EmergencyResourceRepository.java
-/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/IncidentReportRepository.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/IncidentRepository.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/KnowledgeRepository.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/repository/mysql/PlanRepository.java
@@ -78,6 +74,7 @@
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/service/AgentRunService.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/service/AiDecisionService.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/service/AiDecisionServiceMockImpl.java
+/Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/service/AmapGeocodeService.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/service/AuditLogService.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/service/AuthService.java
 /Users/fangyuhan/Desktop/python/Yunnan-Emergency-Response/backend/src/main/java/com/project/service/DashboardService.java

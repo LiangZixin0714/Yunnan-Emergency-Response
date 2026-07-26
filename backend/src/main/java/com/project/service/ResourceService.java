@@ -116,17 +116,18 @@ public class ResourceService {
 
             if (incidentId != null && !incidentId.isEmpty()) {
                 incidentRepository.findByIncidentId(incidentId).ifPresent(incident -> {
-                    incident.setResourceDispatchStatus("completed");
+                    incident.setResourceDispatchStatus("executing");
                     incident.setDisposalPlanStatus("accepted");
-                    incident.setStatus("completed");
                     incidentRepository.save(incident);
                 });
 
                 List<Plan> plans = planRepository.findByIncidentId(incidentId);
                 for (Plan plan : plans) {
-                    plan.setStatus("accepted");
-                    plan.setRejectReason(null);
-                    planRepository.save(plan);
+                    if ("submitted".equals(plan.getStatus()) || "resubmitted".equals(plan.getStatus())) {
+                        plan.setStatus("accepted");
+                        plan.setRejectReason(null);
+                        planRepository.save(plan);
+                    }
                 }
             }
 

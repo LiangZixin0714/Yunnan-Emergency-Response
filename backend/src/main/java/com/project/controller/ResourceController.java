@@ -76,7 +76,7 @@ public class ResourceController {
     }
 
     @PostMapping("/lock")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER')")
     public ResponseEntity<Result<Map<String, Object>>> lockResource(
             @Valid @RequestBody LockResourceRequest request) {
         Map<String, Object> result = resourceService.lockResource(
@@ -90,7 +90,7 @@ public class ResourceController {
     }
 
     @PostMapping("/release")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER')")
     public ResponseEntity<Result<Map<String, Object>>> releaseResource(
             @Valid @RequestBody ReleaseResourceRequest request) {
         Map<String, Object> result = resourceService.releaseResource(
@@ -102,7 +102,7 @@ public class ResourceController {
     }
 
     @PostMapping("/allocate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER')")
     public ResponseEntity<Result<Map<String, Object>>> allocateResource(
             @Valid @RequestBody AllocateResourceRequest request) {
         Map<String, Object> result = resourceService.allocateResource(

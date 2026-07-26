@@ -28,7 +28,8 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse<unknown> | Blob>) => {
     if (response.config.responseType === 'blob' && response.data instanceof Blob) {
-      if (response.data.type && !response.data.type.includes('octet-stream') && !response.data.type.includes('pdf')) {
+      const blobType = response.data.type || ''
+      if (blobType && !blobType.includes('octet-stream') && !blobType.includes('pdf') && !blobType.includes('wordprocessingml') && !blobType.includes('msword') && !blobType.includes('zip')) {
         return response.data.text().then(text => {
           const res = JSON.parse(text) as ApiResponse<unknown>
           ElMessage.error(res.message || '请求失败')

@@ -2,6 +2,7 @@ package com.project.entity.mysql;
 
 import jakarta.persistence.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -32,6 +33,12 @@ public class Incident {
 
     @Column(name = "location", length = 200)
     private String location;
+
+    @Column(name = "latitude", precision = 10, scale = 7)
+    private BigDecimal latitude;
+
+    @Column(name = "longitude", precision = 10, scale = 7)
+    private BigDecimal longitude;
 
     @Column(name = "description", length = 2000)
     private String description;
@@ -74,7 +81,7 @@ public class Incident {
         updatedAt = LocalDateTime.now();
         reportTime = LocalDateTime.now();
         if (status == null) {
-            status = "pending";
+            status = "processing";
         }
     }
 
@@ -145,6 +152,22 @@ public class Incident {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public BigDecimal getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(BigDecimal latitude) {
+        this.latitude = latitude;
+    }
+
+    public BigDecimal getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(BigDecimal longitude) {
+        this.longitude = longitude;
     }
 
     public String getDescription() {

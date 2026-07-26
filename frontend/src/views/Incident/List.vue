@@ -31,8 +31,18 @@ const disasterOptions = Object.entries(DisasterTypeLabel).map(([value, label]) =
 const levelOptions = Object.entries(IncidentLevelLabel).map(([value, label]) => ({ value, label }))
 
 const incidentStatusMap: Record<string, { label: string; type: string }> = {
+  pending: { label: '处置中', type: 'warning' },
   processing: { label: '处置中', type: 'warning' },
   completed: { label: '已结束', type: 'success' },
+}
+
+const unifiedStatusMap: Record<string, { label: string; type: string }> = {
+  pending_review: { label: '待审核', type: 'warning' },
+  requesting_resource: { label: '申请资源中', type: 'info' },
+  rejected: { label: '已驳回', type: 'danger' },
+  completed: { label: '已完成', type: 'success' },
+  no_plan: { label: '待拟方案', type: 'info' },
+  dispatch_done: { label: '调度完成', type: 'success' },
 }
 
 const disposalPlanStatusMap = Object.fromEntries(
@@ -85,15 +95,26 @@ function resetFilters(): void {
 
 
 function handleAction(row: { incidentId: string; resourceDispatchStatus: string | null; disposalPlanStatus: string | null; status: string }): void {
-  if (authStore.roleName === 'ADMIN' && row.status === 'processing' && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'resubmitted') && row.resourceDispatchStatus === 'shortage') {
+  if (authStore.roleName === 'RESOURCE_MANAGER' && row.status === 'processing' && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'resubmitted') && row.resourceDispatchStatus === 'shortage') {
     router.push(`/incident/${row.incidentId}?mode=shortage`)
   } else {
     router.push(`/incident/${row.incidentId}`)
   }
 }
 
+function getUnifiedStatus(row: { incidentId: string; resourceDispatchStatus: string | null; disposalPlanStatus: string | null; status: string }): string {
+  if (row.status === 'completed') return 'completed'
+  if (row.disposalPlanStatus === 'rejected') return 'rejected'
+  if (!row.disposalPlanStatus || row.disposalPlanStatus === 'draft') return 'no_plan'
+  if (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'resubmitted') return 'pending_review'
+  if (row.disposalPlanStatus === 'accepted' && row.resourceDispatchStatus === 'shortage') return 'requesting_resource'
+  if (row.resourceDispatchStatus === 'executing' || row.resourceDispatchStatus === 'completed') return 'dispatch_done'
+  if (row.disposalPlanStatus === 'accepted') return 'pending_review'
+  return 'no_plan'
+}
+
 function getActionLabel(row: { resourceDispatchStatus: string | null; disposalPlanStatus: string | null; status: string }): string {
-  if (authStore.roleName === 'ADMIN' && row.status === 'processing' && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'resubmitted') && row.resourceDispatchStatus === 'shortage') {
+  if (authStore.roleName === 'RESOURCE_MANAGER' && row.status === 'processing' && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'resubmitted') && row.resourceDispatchStatus === 'shortage') {
     return '资源调度'
   }
   return '查看'
@@ -184,25 +205,14 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column
-          v-if="authStore.roleName === 'OPERATOR' || authStore.roleName === 'RESOURCE_MANAGER' || authStore.roleName === 'ADMIN'"
-          prop="disposalPlanStatus"
-          label="处置方案状态"
-          width="130"
+          label="处置进度"
+          width="120"
         >
           <template #default="{ row }">
-            <StatusTag v-if="row.disposalPlanStatus && (row.disposalPlanStatus === 'submitted' || row.disposalPlanStatus === 'rejected' || row.disposalPlanStatus === 'accepted' || row.disposalPlanStatus === 'resubmitted')" :status="row.disposalPlanStatus" :status-map="disposalPlanStatusMap" />
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-if="authStore.roleName === 'RESOURCE_MANAGER' || authStore.roleName === 'ADMIN'"
-          prop="resourceDispatchStatus"
-          label="资源调度状态"
-          width="130"
-        >
-          <template #default="{ row }">
-            <StatusTag v-if="row.resourceDispatchStatus && (row.resourceDispatchStatus === 'executing' || row.resourceDispatchStatus === 'shortage' || row.resourceDispatchStatus === 'completed')" :status="row.resourceDispatchStatus" :status-map="resourceDispatchStatusMap" />
-            <span v-else>-</span>
+            <StatusTag
+              :status="getUnifiedStatus(row)"
+              :status-map="unifiedStatusMap"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">

@@ -37,6 +37,8 @@ export const IncidentLevelLabel: Record<IncidentLevelValue, string> = {
 }
 
 export const IncidentStatus = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
   PROCESSING: 'processing',
   COMPLETED: 'completed',
 } as const
@@ -44,12 +46,16 @@ export const IncidentStatus = {
 export type IncidentStatusValue = (typeof IncidentStatus)[keyof typeof IncidentStatus]
 
 export const IncidentStatusLabel: Record<IncidentStatusValue, string> = {
+  pending: '待确认',
+  confirmed: '已确认',
   processing: '处置中',
   completed: '已结束',
 }
 
 export const IncidentStatusTagType: Record<IncidentStatusValue, string> = {
-  processing: 'warning',
+  pending: 'info',
+  confirmed: '',
+  processing: 'danger',
   completed: 'success',
 }
 
@@ -140,25 +146,31 @@ export const ResourceStatusTagType: Record<ResourceStatusValue, string> = {
 
 export const DispatchOrderStatus = {
   PENDING: 'pending',
+  DISPATCHING: 'dispatching',
   EXECUTING: 'executing',
   COMPLETED: 'completed',
   SHORTAGE: 'shortage',
+  IDLE: 'idle',
 } as const
 
 export type DispatchOrderStatusValue = (typeof DispatchOrderStatus)[keyof typeof DispatchOrderStatus]
 
-export const DispatchOrderStatusLabel: Record<DispatchOrderStatusValue, string> = {
+export const DispatchOrderStatusLabel: Record<string, string> = {
   pending: '待执行',
+  dispatching: '调度中',
   executing: '执行中',
   completed: '已完成',
   shortage: '资源不足',
+  idle: '空闲',
 }
 
-export const DispatchOrderStatusTagType: Record<DispatchOrderStatusValue, string> = {
+export const DispatchOrderStatusTagType: Record<string, string> = {
   pending: 'danger',
+  dispatching: 'info',
   executing: 'warning',
   completed: 'success',
   shortage: 'danger',
+  idle: 'info',
 }
 
 export const DisposalPlanStatus = {
@@ -167,44 +179,56 @@ export const DisposalPlanStatus = {
   ACCEPTED: 'accepted',
   REJECTED: 'rejected',
   RESUBMITTED: 'resubmitted',
+  NONE: '',
 } as const
 
 export type DisposalPlanStatusValue = (typeof DisposalPlanStatus)[keyof typeof DisposalPlanStatus]
 
-export const DisposalPlanStatusLabel: Record<DisposalPlanStatusValue, string> = {
+export const DisposalPlanStatusLabel: Record<string, string> = {
   draft: '草稿',
   submitted: '待审核',
   accepted: '已通过',
   rejected: '已驳回',
-  resubmitted: '待审核',
+  resubmitted: '重新提交',
+  '': '未拟定',
 }
 
-export const DisposalPlanStatusTagType: Record<DisposalPlanStatusValue, string> = {
+export const DisposalPlanStatusTagType: Record<string, string> = {
   draft: 'info',
   submitted: 'warning',
   accepted: 'success',
   rejected: 'danger',
   resubmitted: 'warning',
+  '': 'info',
 }
 
 export const ResourceDispatchStatus = {
+  IDLE: 'idle',
+  DISPATCHING: 'dispatching',
   EXECUTING: 'executing',
   SHORTAGE: 'shortage',
   COMPLETED: 'completed',
+  NONE: '',
 } as const
 
 export type ResourceDispatchStatusValue = (typeof ResourceDispatchStatus)[keyof typeof ResourceDispatchStatus]
 
-export const ResourceDispatchStatusLabel: Record<ResourceDispatchStatusValue, string> = {
-  executing: '调度中',
+export const ResourceDispatchStatusLabel: Record<string, string> = {
+  idle: '空闲',
+  dispatching: '调度中',
+  executing: '执行中',
   shortage: '资源不足',
   completed: '已完成',
+  '': '未调度',
 }
 
-export const ResourceDispatchStatusTagType: Record<ResourceDispatchStatusValue, string> = {
-  executing: 'info',
+export const ResourceDispatchStatusTagType: Record<string, string> = {
+  idle: 'info',
+  dispatching: 'warning',
+  executing: 'warning',
   shortage: 'danger',
   completed: 'success',
+  '': 'info',
 }
 
 export const ApplicationStatus = {

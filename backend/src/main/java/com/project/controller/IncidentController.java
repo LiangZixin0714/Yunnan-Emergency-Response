@@ -5,15 +5,19 @@ import com.project.dto.incident.IncidentReportRequest;
 import com.project.dto.incident.IncidentReportResponse;
 import com.project.dto.incident.IncidentRequest;
 import com.project.dto.incident.IncidentResponse;
+import com.project.entity.mysql.Incident;
 import com.project.entity.mysql.User;
 import com.project.repository.mysql.UserRepository;
 import com.project.service.IncidentService;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/incident")
@@ -44,9 +48,9 @@ public class IncidentController {
     }
 
     @GetMapping("/detail")
-    public ResponseEntity<Result<com.project.entity.mysql.Incident>> getIncident(
+    public ResponseEntity<Result<Incident>> getIncident(
             @RequestParam String incidentId) {
-        com.project.entity.mysql.Incident incident = incidentService.getIncidentById(incidentId);
+        Incident incident = incidentService.getIncidentById(incidentId);
         return ResponseEntity.ok(Result.success(incident));
     }
 
@@ -71,10 +75,25 @@ public class IncidentController {
     }
 
     @PostMapping("/update-status")
-    public ResponseEntity<Result<com.project.entity.mysql.Incident>> updateStatus(
+    public ResponseEntity<Result<Incident>> updateStatus(
             @RequestParam String incidentId,
             @RequestParam String status) {
-        com.project.entity.mysql.Incident incident = incidentService.updateStatus(incidentId, status);
+        Incident incident = incidentService.updateStatus(incidentId, status);
         return ResponseEntity.ok(Result.success(incident));
+    }
+
+    @PostMapping("/complete")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
+    public ResponseEntity<Result<Incident>> completeIncident(
+            @RequestParam String incidentId) {
+        Incident incident = incidentService.completeIncident(incidentId);
+        return ResponseEntity.ok(Result.success(incident));
+    }
+
+    @PostMapping("/backfill-coordinates")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Result<Map<String, Object>>> backfillCoordinates() {
+        Map<String, Object> result = incidentService.backfillCoordinates();
+        return ResponseEntity.ok(Result.success(result));
     }
 }

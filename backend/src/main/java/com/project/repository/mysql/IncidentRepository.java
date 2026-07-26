@@ -32,8 +32,11 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
     @Query("SELECT FUNCTION('DATE_FORMAT', i.createdAt, '%Y-%m-%d') as date, COUNT(i) as count FROM Incident i WHERE i.createdAt >= :startDate GROUP BY FUNCTION('DATE_FORMAT', i.createdAt, '%Y-%m-%d') ORDER BY date")
     List<Object[]> countByDateGroup(@Param("startDate") LocalDateTime startDate);
 
-    @Query("SELECT i FROM Incident i WHERE i.status = 'processing' ORDER BY i.createdAt DESC")
+    @Query("SELECT i FROM Incident i WHERE i.status IN ('processing', 'confirmed') ORDER BY i.createdAt DESC")
     List<Incident> findActiveIncidents();
+
+    @Query("SELECT i FROM Incident i WHERE i.latitude IS NOT NULL AND i.longitude IS NOT NULL ORDER BY i.createdAt DESC")
+    List<Incident> findWithCoordinates();
 
     @Query("SELECT i FROM Incident i ORDER BY i.createdAt DESC")
     List<Incident> findRecentIncidents(Pageable pageable);

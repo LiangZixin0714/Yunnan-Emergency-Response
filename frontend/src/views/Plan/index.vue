@@ -4,8 +4,8 @@ import { useRoute } from 'vue-router'
 import { usePlanStore } from '@/stores/plan'
 import { useIncidentStore } from '@/stores/incident'
 import { useDisposalPlanStore } from '@/stores/disposal-plan'
-import { PlanStatusLabel, PlanStatusTagType, DisposalPlanStatusLabel, DisposalPlanStatusTagType } from '@/types/enums'
-import type { PlanStatusValue, DisposalPlanStatusValue } from '@/types/enums'
+import { DisposalPlanStatusLabel, DisposalPlanStatusTagType } from '@/types/enums'
+import type { DisposalPlanStatusValue } from '@/types/enums'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { formatDate } from '@/utils/format'
 import StatusTag from '@/components/StatusTag.vue'
@@ -446,8 +446,8 @@ watch(selectedIncidentId, (newVal) => {
           <div class="plan-page__item-meta">
             <span>灾情：{{ plan.incidentId }}</span>
             <span>{{ plan.generateTime ? formatDate(plan.generateTime, 'YYYY-MM-DD HH:mm') : '-' }}</span>
-            <el-tag size="small" :type="PlanStatusTagType[plan.status as PlanStatusValue] ?? 'info'">
-              {{ PlanStatusLabel[plan.status as PlanStatusValue] ?? plan.status }}
+            <el-tag size="small" :type="DisposalPlanStatusTagType[plan.status as DisposalPlanStatusValue] ?? 'info'">
+              {{ DisposalPlanStatusLabel[plan.status as DisposalPlanStatusValue] ?? plan.status }}
             </el-tag>
           </div>
           <div class="plan-page__item-actions">
@@ -501,8 +501,8 @@ watch(selectedIncidentId, (newVal) => {
             <div class="plan-page__content-meta">
               <span>灾情ID：{{ planStore.currentPlan.incidentId }}</span>
               <span>生成时间：{{ planStore.currentPlan.generateTime ? formatDate(planStore.currentPlan.generateTime) : '-' }}</span>
-              <el-tag size="small" :type="PlanStatusTagType[planStore.currentPlan.status as PlanStatusValue] ?? 'info'">
-                {{ PlanStatusLabel[planStore.currentPlan.status as PlanStatusValue] }}
+              <el-tag size="small" :type="DisposalPlanStatusTagType[planStore.currentPlan.status as DisposalPlanStatusValue] ?? 'info'">
+                {{ DisposalPlanStatusLabel[planStore.currentPlan.status as DisposalPlanStatusValue] ?? planStore.currentPlan.status }}
               </el-tag>
             </div>
             <el-divider />

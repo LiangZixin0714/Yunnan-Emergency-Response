@@ -106,33 +106,43 @@ async function handleAddResource(): Promise<void> {
   }
 }
 
-async function handleIncrease(row: { id: number; resourceName: string; totalStock: number; availableStock: number; lockedStock: number }): Promise<void> {
-  const newTotal = row.totalStock + 1
-  const newAvailable = (row.availableStock ?? 0) + 1
-  try {
-    await resourceStore.updateExistingResource(row.id, {
-      totalStock: newTotal,
-      availableStock: newAvailable,
-    })
-    ElMessage.success(`已增加 ${row.resourceName} 数量，当前总数：${newTotal}`)
-  } catch {
-    ElMessage.error('更新库存失败')
-  }
+const adjustDialogVisible = ref(false)
+const adjustRow = ref<{ id: number; resourceName: string; totalStock: number; availableStock: number; lockedStock: number } | null>(null)
+const adjustQuantity = ref(1)
+const adjustType = ref<'increase' | 'decrease'>('increase')
+
+function openAdjustDialog(row: { id: number; resourceName: string; totalStock: number; availableStock: number; lockedStock: number }, type: 'increase' | 'decrease'): void {
+  adjustRow.value = row
+  adjustType.value = type
+  adjustQuantity.value = 1
+  adjustDialogVisible.value = true
 }
 
-async function handleDecrease(row: { id: number; resourceName: string; totalStock: number; availableStock: number; lockedStock: number }): Promise<void> {
-  if (row.totalStock <= (row.lockedStock || 0)) {
-    ElMessage.warning('数量不能小于已调度数')
-    return
+async function confirmAdjust(): Promise<void> {
+  if (!adjustRow.value) return
+  const row = adjustRow.value
+  let newTotal: number, newAvailable: number
+
+  if (adjustType.value === 'increase') {
+    newTotal = row.totalStock + adjustQuantity.value
+    newAvailable = (row.availableStock ?? 0) + adjustQuantity.value
+  } else {
+    if (row.totalStock - adjustQuantity.value < (row.lockedStock || 0)) {
+      ElMessage.warning('减少后不能小于已调度数')
+      return
+    }
+    newTotal = row.totalStock - adjustQuantity.value
+    newAvailable = Math.max(0, (row.availableStock ?? 0) - adjustQuantity.value)
   }
-  const newTotal = row.totalStock - 1
-  const newAvailable = Math.max(0, (row.availableStock ?? 0) - 1)
+
   try {
     await resourceStore.updateExistingResource(row.id, {
       totalStock: newTotal,
       availableStock: newAvailable,
     })
-    ElMessage.success(`已减少 ${row.resourceName} 数量，当前总数：${newTotal}`)
+    const action = adjustType.value === 'increase' ? '增加' : '减少'
+    ElMessage.success(`已${action} ${row.resourceName} ${adjustQuantity.value} 个，当前总数：${newTotal}`)
+    adjustDialogVisible.value = false
   } catch {
     ElMessage.error('更新库存失败')
   }
@@ -261,10 +271,10 @@ onMounted(() => {
             </el-table-column>
             <el-table-column prop="unit" label="单位" width="80" />
             <el-table-column prop="location" label="存放地址" min-width="160" />
-            <el-table-column v-if="authStore.roleName === 'ADMIN'" label="操作" width="200" fixed="right">
+            <el-table-column v-if="authStore.roleName === 'ADMIN'" label="操作" width="220" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" @click="handleIncrease(row)">增加</el-button>
-                <el-button link type="warning" @click="handleDecrease(row)">删减</el-button>
+                <el-button link type="primary" @click="openAdjustDialog(row, 'increase')">增加</el-button>
+                <el-button link type="warning" @click="openAdjustDialog(row, 'decrease')">删减</el-button>
                 <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
               </template>
             </el-table-column>
@@ -362,6 +372,26 @@ onMounted(() => {
       <template #footer>
         <el-button @click="replenishDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmReplenish">确认补充</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="adjustDialogVisible" :title="adjustType === 'increase' ? '增加库存' : '减少库存'" width="400px">
+      <template v-if="adjustRow">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="资源名称">{{ adjustRow.resourceName }}</el-descriptions-item>
+          <el-descriptions-item label="当前总库存">{{ adjustRow.totalStock }}</el-descriptions-item>
+          <el-descriptions-item label="已调度">{{ adjustRow.lockedStock ?? 0 }}</el-descriptions-item>
+          <el-descriptions-item label="剩余库存">{{ adjustRow.availableStock ?? 0 }}</el-descriptions-item>
+        </el-descriptions>
+        <el-form label-width="100px" style="margin-top: 16px">
+          <el-form-item :label="adjustType === 'increase' ? '增加数量' : '减少数量'">
+            <el-input-number v-model="adjustQuantity" :min="1" :step="1" />
+          </el-form-item>
+        </el-form>
+      </template>
+      <template #footer>
+        <el-button @click="adjustDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmAdjust">确认</el-button>
       </template>
     </el-dialog>
   </div>
