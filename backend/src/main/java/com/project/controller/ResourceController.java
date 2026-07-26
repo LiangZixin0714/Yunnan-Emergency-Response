@@ -35,8 +35,9 @@ public class ResourceController {
     }
 
     @GetMapping("/list")
-    public ResponseEntity<Result<List<EmergencyResource>>> getAllResources() {
-        List<EmergencyResource> resources = resourceService.getAllResources();
+    public ResponseEntity<Result<List<EmergencyResource>>> getAllResources(
+            @RequestParam(required = false) String resourceType) {
+        List<EmergencyResource> resources = resourceService.getAllResources(resourceType);
         return ResponseEntity.ok(Result.success(resources));
     }
 
@@ -76,7 +77,7 @@ public class ResourceController {
     }
 
     @PostMapping("/lock")
-    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER', 'ADMIN')")
     public ResponseEntity<Result<Map<String, Object>>> lockResource(
             @Valid @RequestBody LockResourceRequest request) {
         Map<String, Object> result = resourceService.lockResource(
@@ -90,7 +91,7 @@ public class ResourceController {
     }
 
     @PostMapping("/release")
-    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER', 'ADMIN')")
     public ResponseEntity<Result<Map<String, Object>>> releaseResource(
             @Valid @RequestBody ReleaseResourceRequest request) {
         Map<String, Object> result = resourceService.releaseResource(

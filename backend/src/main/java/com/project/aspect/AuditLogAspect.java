@@ -175,9 +175,17 @@ public class AuditLogAspect {
     private Long getCurrentUserId() {
         try {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
-                UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-                return getUserIdFromUsername(userDetails.getUsername());
+            if (authentication != null) {
+                Object principal = authentication.getPrincipal();
+                String username = null;
+                if (principal instanceof UserDetails) {
+                    username = ((UserDetails) principal).getUsername();
+                } else if (principal instanceof String) {
+                    username = (String) principal;
+                }
+                if (username != null) {
+                    return getUserIdFromUsername(username);
+                }
             }
         } catch (Exception e) {
             logger.error("获取当前用户ID失败", e);
@@ -188,9 +196,13 @@ public class AuditLogAspect {
     private String getCurrentUsername() {
         try {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
-                UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-                return userDetails.getUsername();
+            if (authentication != null) {
+                Object principal = authentication.getPrincipal();
+                if (principal instanceof UserDetails) {
+                    return ((UserDetails) principal).getUsername();
+                } else if (principal instanceof String) {
+                    return (String) principal;
+                }
             }
         } catch (Exception e) {
             logger.error("获取当前用户名失败", e);

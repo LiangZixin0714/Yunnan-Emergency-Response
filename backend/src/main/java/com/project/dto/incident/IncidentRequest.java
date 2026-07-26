@@ -15,6 +15,8 @@ public class IncidentRequest {
     @NotBlank(message = "严重程度不能为空")
     private String severity;
 
+    private String location;
+
     private Double latitude;
 
     private Double longitude;
@@ -51,6 +53,14 @@ public class IncidentRequest {
 
     public void setSeverity(String severity) {
         this.severity = severity;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
     }
 
     public Double getLatitude() {

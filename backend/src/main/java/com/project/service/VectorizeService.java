@@ -47,10 +47,15 @@ public class VectorizeService {
 
         knowledge.setVectorizeStatus(Knowledge.STATUS_PROCESSING);
         knowledge.setVectorizeStartedAt(LocalDateTime.now());
+        knowledge.setVectorizeFailReason(null);
+        knowledge.setVectorizeCompletedAt(null);
+        knowledge.setChunkCount(0);
         knowledgeRepository.save(knowledge);
+        logger.info("开始向量化: fileId={}, objectKey={}, bucket={}", fileId, knowledge.getObjectKey(), knowledge.getBucket());
 
         try {
             String url = aiServiceConfig.getUrl() + "/api/v1/knowledge/vectorize";
+            logger.info("调用AI服务向量化: url={}, fileId={}, fileName={}", url, fileId, knowledge.getFileName());
             Map<String, Object> requestBody = Map.of(
                     "objectKey", knowledge.getObjectKey(),
                     "bucket", knowledge.getBucket(),
@@ -60,6 +65,7 @@ public class VectorizeService {
 
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.postForObject(url, requestBody, Map.class);
+            logger.info("AI服务向量化响应: fileId={}, response={}", fileId, response);
 
             if (response != null && "completed".equals(response.get("status"))) {
                 knowledge.setVectorizeStatus(Knowledge.STATUS_COMPLETED);
@@ -69,11 +75,12 @@ public class VectorizeService {
                 logger.info("向量化完成: fileId={}, chunkCount={}", fileId, knowledge.getChunkCount());
             } else {
                 String failReason = response != null ? (String) response.get("failReason") : "未知错误";
+                logger.warn("向量化失败: fileId={}, failReason={}", fileId, failReason);
                 handleVectorizeFailure(knowledge, failReason);
             }
         } catch (RestClientException e) {
-            logger.error("向量化请求失败: fileId={}, error={}", fileId, e.getMessage());
-            handleVectorizeFailure(knowledge, "AI服务不可达");
+            logger.error("向量化请求失败: fileId={}, url={}, error={}", fileId, aiServiceConfig.getUrl(), e.getMessage());
+            handleVectorizeFailure(knowledge, "AI服务不可达: " + e.getMessage());
         } catch (Exception e) {
             logger.error("向量化异常: fileId={}", fileId, e);
             handleVectorizeFailure(knowledge, "向量化处理异常: " + e.getMessage());

@@ -1,5 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS pgvector;
 
 CREATE TABLE IF NOT EXISTS locations (
     id BIGSERIAL PRIMARY KEY,
@@ -33,9 +33,29 @@ CREATE TABLE IF NOT EXISTS emergency_plans (
     description TEXT,
     plan_type VARCHAR(50),
     keywords TEXT[],
-    embedding vector(1536),
+    embedding vector(512),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+    id SERIAL PRIMARY KEY,
+    chunk_id VARCHAR(255) UNIQUE NOT NULL,
+    document_name VARCHAR(255) NOT NULL,
+    document_type VARCHAR(50) NOT NULL,
+    chapter VARCHAR(50) NOT NULL,
+    section VARCHAR(50),
+    page INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    length INTEGER NOT NULL,
+    "order" INTEGER NOT NULL,
+    source VARCHAR(255) NOT NULL,
+    publish_org VARCHAR(255) NOT NULL,
+    publish_date VARCHAR(20),
+    version VARCHAR(50) NOT NULL,
+    embedding double precision[],
+    model_name VARCHAR(100) NOT NULL DEFAULT 'BAAI/bge-small-zh-v1.5',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_locations_coordinates ON locations USING GIST (coordinates);

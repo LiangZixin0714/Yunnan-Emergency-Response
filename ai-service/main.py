@@ -45,6 +45,7 @@ _workflow_ready = False
 async def startup():
     global _workflow_ready
     logger.info("Starting AI service...")
+    logger.info(f"环境变量: MINIO_ENDPOINT={os.environ.get('MINIO_ENDPOINT', '未设置')}, PG_HOST={os.environ.get('PG_HOST', '未设置')}, BACKEND_URL={os.environ.get('BACKEND_URL', '未设置')}")
     try:
         from rag.retriever import check_database_status
         db_status = check_database_status()

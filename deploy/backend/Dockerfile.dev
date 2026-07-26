@@ -1,0 +1,16 @@
+FROM maven:3.9-eclipse-temurin-19
+
+WORKDIR /app
+
+COPY settings.xml /usr/share/maven/conf/settings.xml
+COPY pom.xml .
+COPY src ./src
+
+RUN mvn compile -B -q -DskipTests
+
+EXPOSE 8080
+
+ENV SPRING_PROFILES_ACTIVE=dev
+ENV SPRING_DEVTOOLS_RESTART_ENABLED=true
+
+CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.profiles=dev"]

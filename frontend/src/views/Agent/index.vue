@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAgentRunList, getAgentRunCitations, getAuditLogList } from '@/api/agent'
 import type { AgentRun, Citation, AuditLog, PageResult } from '@/types/agent'
@@ -44,8 +44,11 @@ const moduleOptions = [
   { label: '资源请求', value: 'resource-request' },
 ]
 
-async function fetchAgentRuns() {
-  agentLoading.value = true
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+const REFRESH_INTERVAL = 10000
+
+async function fetchAgentRuns(silent = false) {
+  if (!silent) agentLoading.value = true
   try {
     const res = await getAgentRunList({
       page: agentPage.value,
@@ -55,14 +58,14 @@ async function fetchAgentRuns() {
     })
     agentData.value = res
   } catch {
-    ElMessage.error('获取Agent执行记录失败')
+    if (!silent) ElMessage.error('获取Agent执行记录失败')
   } finally {
     agentLoading.value = false
   }
 }
 
-async function fetchAuditLogs() {
-  auditLoading.value = true
+async function fetchAuditLogs(silent = false) {
+  if (!silent) auditLoading.value = true
   try {
     const res = await getAuditLogList({
       page: auditPage.value,
@@ -73,9 +76,27 @@ async function fetchAuditLogs() {
     })
     auditData.value = res
   } catch {
-    ElMessage.error('获取审计日志失败')
+    if (!silent) ElMessage.error('获取审计日志失败')
   } finally {
     auditLoading.value = false
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh()
+  refreshTimer = setInterval(() => {
+    if (activeTab.value === 'agent') {
+      fetchAgentRuns(true)
+    } else {
+      fetchAuditLogs(true)
+    }
+  }, REFRESH_INTERVAL)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
   }
 }
 
@@ -122,6 +143,14 @@ function searchAudit() {
   fetchAuditLogs()
 }
 
+function handleTabChange(tab: string | number) {
+  if (tab === 'audit') {
+    fetchAuditLogs()
+  } else {
+    fetchAgentRuns()
+  }
+}
+
 function formatTime(val: string | null) {
   if (!val) return '-'
   return val.replace('T', ' ').substring(0, 19)
@@ -136,6 +165,11 @@ function getStatusType(status: string) {
 
 onMounted(() => {
   fetchAgentRuns()
+  startAutoRefresh()
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 
@@ -145,7 +179,7 @@ onMounted(() => {
       <h2 class="page-header__title">Agent与审计日志</h2>
     </div>
 
-    <el-tabs v-model="activeTab" @tab-change="(tab: string | number) => { if (tab === 'audit') fetchAuditLogs() }">
+    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <el-tab-pane label="Agent执行记录" name="agent">
         <el-card shadow="hover" style="margin-bottom: 16px">
           <el-form :inline="true" @submit.prevent="searchAgent">

@@ -99,7 +99,7 @@ const canDispatchResource = computed(() => {
   const role = authStore.roleName
   const status = incidentStore.currentIncident?.status
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return role === 'RESOURCE_MANAGER' && status !== 'completed' && (dpStatus === 'submitted' || dpStatus === 'resubmitted' || dpStatus === 'accepted')
+  return (role === 'RESOURCE_MANAGER' || role === 'ADMIN') && status !== 'completed' && (dpStatus === 'submitted' || dpStatus === 'resubmitted' || dpStatus === 'accepted' || dpStatus === 'draft' || !dpStatus)
 })
 
 const canRejectPlan = computed(() => {

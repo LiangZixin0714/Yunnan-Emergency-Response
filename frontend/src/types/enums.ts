@@ -100,6 +100,7 @@ export const ResourceType = {
   MEDICAL: 'medical',
   VEHICLE: 'vehicle',
   SHELTER: 'shelter',
+  OTHER: 'other',
 } as const
 
 export type ResourceTypeValue = (typeof ResourceType)[keyof typeof ResourceType]
@@ -109,6 +110,7 @@ export const ResourceTypeLabel: Record<ResourceTypeValue, string> = {
   medical: '医疗物资',
   vehicle: '运输车辆',
   shelter: '避难场所',
+  other: '其他',
 }
 
 export const ResourceStatus = {

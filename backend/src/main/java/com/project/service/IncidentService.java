@@ -285,10 +285,28 @@ public class IncidentService {
         Incident incident = new Incident();
         incident.setIncidentId(UUID.randomUUID().toString());
         incident.setIncidentName(request.getTitle());
+        incident.setTitle(request.getTitle());
         incident.setDisasterType(request.getIncidentType());
         incident.setDescription(request.getDescription());
+        incident.setIncidentLevel(request.getSeverity());
         incident.setStatus("processing");
         incident.setReporterId(reporterId);
+        incident.setLocation(request.getLocation());
+
+        if (request.getLatitude() != null && request.getLongitude() != null) {
+            incident.setLatitude(BigDecimal.valueOf(request.getLatitude()));
+            incident.setLongitude(BigDecimal.valueOf(request.getLongitude()));
+        } else if (request.getLocation() != null && !request.getLocation().trim().isEmpty()) {
+            try {
+                double[] coords = amapGeocodeService.geocode(request.getLocation());
+                if (coords != null) {
+                    incident.setLatitude(BigDecimal.valueOf(coords[0]));
+                    incident.setLongitude(BigDecimal.valueOf(coords[1]));
+                }
+            } catch (Exception e) {
+                logger.warn("地理编码失败，不影响上报流程: location={}", request.getLocation(), e);
+            }
+        }
 
         incidentRepository.save(incident);
 

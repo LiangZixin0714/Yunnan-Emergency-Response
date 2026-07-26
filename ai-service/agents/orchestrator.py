@@ -6,7 +6,8 @@ import sys
 import os
 import time
 import uuid
-from typing import Dict, Any, TypedDict, List
+from typing import Dict, Any, TypedDict, List, Annotated, Optional
+from operator import add
 
 from langgraph.graph import StateGraph, END
 
@@ -22,7 +23,64 @@ from rag.retriever import retrieve_plans
 logger = setup_logger()
 
 
+def _safe_submit_audit(
+    run_id: str,
+    incident_id: str,
+    agent_name: str,
+    input_params: str,
+    output_result: str,
+    status: str,
+    start_time: str,
+    end_time: str,
+    citations: Optional[List[Dict[str, Any]]] = None,
+    error_message: Optional[str] = None,
+):
+    """安全提交审计日志，兼容同步和异步调用上下文。"""
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+            if loop and loop.is_running():
+                logger.info(f"审计: 在异步上下文中提交, runId={run_id}")
+                coro = submit_agent_run(
+                    run_id=run_id,
+                    incident_id=incident_id,
+                    agent_name=agent_name,
+                    input_params=input_params,
+                    output_result=output_result,
+                    status=status,
+                    start_time=start_time,
+                    end_time=end_time,
+                    citations=citations,
+                    error_message=error_message,
+                )
+                try:
+                    loop.create_task(coro)
+                except RuntimeError:
+                    asyncio.ensure_future(coro)
+                return
+        except RuntimeError:
+            pass
+
+        logger.info(f"审计: 在同步上下文中通过 asyncio.run 提交, runId={run_id}")
+        asyncio.run(submit_agent_run(
+            run_id=run_id,
+            incident_id=incident_id,
+            agent_name=agent_name,
+            input_params=input_params,
+            output_result=output_result,
+            status=status,
+            start_time=start_time,
+            end_time=end_time,
+            citations=citations,
+            error_message=error_message,
+        ))
+    except Exception as e:
+        logger.error(f"审计记录提交失败: runId={run_id}, error={e}")
+
+
 MAX_RETRY_COUNT = 3
+MIN_PASS_SCORE = 6
+
 
 class AgentState(TypedDict):
     """LangGraph状态定义。"""
@@ -32,155 +90,183 @@ class AgentState(TypedDict):
     resources: List[Dict[str, Any]]
     plan: str
     review: Dict[str, Any]
-    messages: List[str]
+    messages: Annotated[List[str], add]
     retry_count: int
 
 
-def _extract_info(state: AgentState) -> AgentState:
+def _extract_info(state: AgentState) -> Dict[str, Any]:
     """情报分析节点：从灾情描述中提取结构化信息。"""
     logger.info("🔹 LangGraph: 执行情报分析")
     start_time = time.time()
-    
+
     try:
         info = extract_incident_info(state["description"])
         elapsed = time.time() - start_time
-        state["info"] = info
-        state["messages"].append(f"情报分析完成: 类型={info.get('type')}, 等级={info.get('level')}, 位置={info.get('location')}, 耗时={elapsed:.2f}秒")
         logger.info(f"✅ 情报分析完成，耗时: {elapsed:.2f}秒")
+        return {
+            "info": info,
+            "messages": [f"情报分析完成: 类型={info.get('type')}, 等级={info.get('level')}, 位置={info.get('location')}, 耗时={elapsed:.2f}秒"]
+        }
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"🔹 LangGraph: 情报分析失败: {e}")
-        state["info"] = {
-            "type": "其他",
-            "level": "中",
-            "location": "未知",
-            "affected_population": None,
-            "confidence": 0.0
+        return {
+            "info": {
+                "type": "其他",
+                "level": "中",
+                "location": "未知",
+                "affected_population": None,
+                "confidence": 0.0
+            },
+            "messages": [f"情报分析失败: {e}, 耗时={elapsed:.2f}秒"]
         }
-        state["messages"].append(f"情报分析失败: {e}, 耗时={elapsed:.2f}秒")
-    
-    return state
 
 
-def _retrieve_plans(state: AgentState) -> AgentState:
+def _retrieve_plans(state: AgentState) -> Dict[str, Any]:
     """RAG检索节点：根据灾情信息检索相关预案。"""
     logger.info("🔹 LangGraph: 执行RAG检索")
     start_time = time.time()
-    
+
     try:
         info = state.get("info", {})
         disaster_type = info.get("type", "")
         location = info.get("location", "")
         query = f"{disaster_type} {location} 应急处置"
-        
+
         plans = retrieve_plans(query, limit=3)
         elapsed = time.time() - start_time
-        state["retrieved_plans"] = plans
-        
+
         if plans:
             logger.info(f"✅ RAG检索成功，返回 {len(plans)} 条预案，耗时: {elapsed:.2f}秒")
             plan_names = ", ".join([p["document_name"] for p in plans[:3]])
-            state["messages"].append(f"RAG检索完成，找到 {len(plans)} 条相关预案: {plan_names}{'...' if len(plans) > 3 else ''}, 耗时={elapsed:.2f}秒")
+            return {
+                "retrieved_plans": plans,
+                "messages": [f"RAG检索完成，找到 {len(plans)} 条相关预案: {plan_names}{'...' if len(plans) > 3 else ''}, 耗时={elapsed:.2f}秒"]
+            }
         else:
             logger.info(f"🔹 RAG检索未找到相关预案，耗时: {elapsed:.2f}秒")
-            state["messages"].append(f"RAG检索未找到相关预案，将基于通用知识生成方案，耗时={elapsed:.2f}秒")
-    
+            return {
+                "retrieved_plans": [],
+                "messages": [f"RAG检索未找到相关预案，将基于通用知识生成方案，耗时={elapsed:.2f}秒"]
+            }
+
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"❌ RAG检索失败: {e}, 耗时: {elapsed:.2f}秒")
-        state["retrieved_plans"] = []
-        state["messages"].append(f"RAG检索失败: {e}, 耗时={elapsed:.2f}秒")
-    
-    return state
+        return {
+            "retrieved_plans": [],
+            "messages": [f"RAG检索失败: {e}, 耗时={elapsed:.2f}秒"]
+        }
 
 
-def _dispatch_resources(state: AgentState) -> AgentState:
+def _dispatch_resources(state: AgentState) -> Dict[str, Any]:
     """资源调度节点：根据灾情信息查询可用资源。"""
     logger.info("🔹 LangGraph: 执行资源调度")
     start_time = time.time()
-    
+
     try:
         info = state.get("info", {})
         resources = dispatch_resources(info)
         elapsed = time.time() - start_time
-        state["resources"] = resources
-        
+
         if resources:
             resource_names = ", ".join([r["name"] for r in resources[:3]])
             logger.info(f"✅ 资源调度成功，返回 {len(resources)} 条资源，耗时: {elapsed:.2f}秒")
-            state["messages"].append(f"资源调度完成，找到 {len(resources)} 条可用资源: {resource_names}{'...' if len(resources) > 3 else ''}, 耗时={elapsed:.2f}秒")
+            return {
+                "resources": resources,
+                "messages": [f"资源调度完成，找到 {len(resources)} 条可用资源: {resource_names}{'...' if len(resources) > 3 else ''}, 耗时={elapsed:.2f}秒"]
+            }
         else:
             logger.info(f"🔹 资源调度未找到可用资源，耗时: {elapsed:.2f}秒")
-            state["messages"].append(f"资源调度未找到可用资源，将使用默认资源配置，耗时={elapsed:.2f}秒")
-    
+            return {
+                "resources": [],
+                "messages": [f"资源调度未找到可用资源，将使用默认资源配置，耗时={elapsed:.2f}秒"]
+            }
+
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"❌ 资源调度失败: {e}, 耗时: {elapsed:.2f}秒")
-        state["resources"] = []
-        state["messages"].append(f"资源调度失败: {e}, 耗时={elapsed:.2f}秒")
-    
-    return state
+        return {
+            "resources": [],
+            "messages": [f"资源调度失败: {e}, 耗时={elapsed:.2f}秒"]
+        }
 
 
-def _generate_plan(state: AgentState) -> AgentState:
-    """方案生成节点：生成完整应急处置方案（结合RAG检索结果和资源调度结果）。"""
+def _generate_plan(state: AgentState) -> Dict[str, Any]:
+    """方案生成节点：生成完整应急处置方案。"""
     logger.info("🔹 LangGraph: 执行方案生成")
     start_time = time.time()
-    
+
     try:
         retrieved_plans = state.get("retrieved_plans", [])
         resources = state.get("resources", [])
         plan = generate_plan(state["info"], state["description"], retrieved_plans, resources)
         elapsed = time.time() - start_time
-        state["plan"] = plan
-        state["messages"].append(f"方案生成完成，长度 {len(plan)} 字符，耗时={elapsed:.2f}秒")
         logger.info(f"✅ 方案生成完成，方案长度: {len(plan)} 字符，耗时: {elapsed:.2f}秒")
+        return {
+            "plan": plan,
+            "messages": [f"方案生成完成，长度 {len(plan)} 字符，耗时={elapsed:.2f}秒"]
+        }
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"❌ 方案生成失败: {e}, 耗时: {elapsed:.2f}秒")
-        state["plan"] = f"方案生成失败: {e}"
-        state["messages"].append(f"方案生成失败: {e}, 耗时={elapsed:.2f}秒")
-    
-    return state
+        default_plan = f"方案生成失败: {e}"
+        return {
+            "plan": default_plan,
+            "messages": [f"方案生成失败: {e}, 耗时={elapsed:.2f}秒"]
+        }
 
 
-def _review_plan(state: AgentState) -> AgentState:
-    """方案审查节点：审查方案合规性。"""
+def _review_plan(state: AgentState) -> Dict[str, Any]:
+    """方案审查节点：审查方案合规性，并在需要时累加重试次数。"""
     logger.info("🔹 LangGraph: 执行方案审查")
     start_time = time.time()
-    
+
+    current_retry = state.get("retry_count", 0)
+
     try:
         review = review_plan(state["plan"])
         elapsed = time.time() - start_time
-        state["review"] = review
-        state["messages"].append(f"方案审查完成: 评分={review.get('score')}, 通过={review.get('passed')}, 耗时={elapsed:.2f}秒")
-        logger.info(f"✅ 方案审查完成: score={review.get('score')}, 通过={review.get('passed')}, 耗时: {elapsed:.2f}秒")
+        score = review.get("score", 0)
+        passed = review.get("passed", False)
+        logger.info(f"✅ 方案审查完成: score={score}, 通过={passed}, 耗时: {elapsed:.2f}秒")
+
+        retry_count = current_retry
+        if not passed and score >= MIN_PASS_SCORE and current_retry < MAX_RETRY_COUNT:
+            retry_count = current_retry + 1
+            logger.info(f"🔹 LangGraph: 方案未通过 (score={score}), 准备第 {retry_count}/{MAX_RETRY_COUNT} 次重试")
+
+        return {
+            "review": review,
+            "retry_count": retry_count,
+            "messages": [f"方案审查完成: 评分={score}, 通过={passed}, 耗时={elapsed:.2f}秒"]
+        }
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"❌ 方案审查失败: {e}, 耗时: {elapsed:.2f}秒")
-        state["review"] = {
-            "score": 5,
-            "issues": [f"审查失败: {e}"],
-            "passed": False
+        return {
+            "review": {
+                "score": 5,
+                "issues": [f"审查失败: {e}"],
+                "passed": False
+            },
+            "retry_count": current_retry,
+            "messages": [f"方案审查失败: {e}, 耗时={elapsed:.2f}秒"]
         }
-        state["messages"].append(f"方案审查失败: {e}, 耗时={elapsed:.2f}秒")
-    
-    return state
 
 
 def _should_retry(state: AgentState) -> str:
-    """决策节点：判断是否需要重试方案生成。"""
+    """决策节点：根据 state 中的 review 和 retry_count 决定走向。"""
     review = state.get("review", {})
-    passed = review.get("passed", True)
+    passed = review.get("passed", False)
+    score = review.get("score", 0)
     retry_count = state.get("retry_count", 0)
-    
-    if not passed and review.get("score", 0) > 4 and retry_count < MAX_RETRY_COUNT:
-        state["retry_count"] = retry_count + 1
-        logger.info(f"🔹 LangGraph: 方案未通过，重试生成 (第 {state['retry_count']}/{MAX_RETRY_COUNT} 次)")
-        state["messages"].append(f"方案未通过审查，重新生成... (第 {state['retry_count']}/{MAX_RETRY_COUNT} 次)")
+
+    if not passed and score >= MIN_PASS_SCORE and retry_count < MAX_RETRY_COUNT:
+        logger.info(f"🔹 LangGraph: 重试生成 (retry_count={retry_count})")
         return "generate_plan"
-    
-    logger.info("🔹 LangGraph: 方案审查通过或达到最大重试次数，流程结束")
+
+    logger.info(f"🔹 LangGraph: 流程结束 (passed={passed}, score={score}, retry_count={retry_count})")
     return END
 
 
@@ -229,8 +315,6 @@ def run_workflow(description: str, incident_id: str = "") -> Dict[str, Any]:
     logger.info(f"🚀 开始执行工作流，描述长度: {len(description)}")
     total_start_time = time.time()
     run_id = str(uuid.uuid4())
-    workflow_start_iso = None
-    workflow_end_iso = None
     
     try:
         app = build_workflow()
@@ -257,7 +341,7 @@ def run_workflow(description: str, incident_id: str = "") -> Dict[str, Any]:
             workflow_start_iso = datetime.fromtimestamp(total_start_time).isoformat()
             workflow_end_iso = datetime.now().isoformat()
             citations = build_citations(result.get("retrieved_plans", []), run_id)
-            asyncio.create_task(submit_agent_run(
+            _safe_submit_audit(
                 run_id=run_id,
                 incident_id=incident_id,
                 agent_name="orchestrator",
@@ -267,7 +351,7 @@ def run_workflow(description: str, incident_id: str = "") -> Dict[str, Any]:
                 start_time=workflow_start_iso,
                 end_time=workflow_end_iso,
                 citations=citations,
-            ))
+            )
         except Exception as audit_err:
             logger.error(f"审计记录提交失败（不影响结果）: {audit_err}")
 
@@ -281,7 +365,7 @@ def run_workflow(description: str, incident_id: str = "") -> Dict[str, Any]:
             from datetime import datetime
             workflow_start_iso = datetime.fromtimestamp(total_start_time).isoformat()
             workflow_end_iso = datetime.now().isoformat()
-            asyncio.create_task(submit_agent_run(
+            _safe_submit_audit(
                 run_id=run_id,
                 incident_id=incident_id,
                 agent_name="orchestrator",
@@ -291,7 +375,7 @@ def run_workflow(description: str, incident_id: str = "") -> Dict[str, Any]:
                 error_message=str(e),
                 start_time=workflow_start_iso,
                 end_time=workflow_end_iso,
-            ))
+            )
         except Exception as audit_err:
             logger.error(f"审计记录提交失败（不影响结果）: {audit_err}")
 
@@ -335,7 +419,7 @@ def run_workflow_stream(description: str, incident_id: str = ""):
             from datetime import datetime
             stream_end_time = time.time()
             citations = build_citations(retrieved_plans, run_id)
-            asyncio.create_task(submit_agent_run(
+            _safe_submit_audit(
                 run_id=run_id,
                 incident_id=incident_id,
                 agent_name="orchestrator",
@@ -345,7 +429,7 @@ def run_workflow_stream(description: str, incident_id: str = ""):
                 start_time=datetime.fromtimestamp(stream_start_time).isoformat(),
                 end_time=datetime.fromtimestamp(stream_end_time).isoformat(),
                 citations=citations,
-            ))
+            )
         except Exception as audit_err:
             logger.error(f"审计记录提交失败（不影响结果）: {audit_err}")
         
@@ -355,7 +439,7 @@ def run_workflow_stream(description: str, incident_id: str = ""):
         try:
             from datetime import datetime
             stream_end_time = time.time()
-            asyncio.create_task(submit_agent_run(
+            _safe_submit_audit(
                 run_id=run_id,
                 incident_id=incident_id,
                 agent_name="orchestrator",
@@ -365,7 +449,7 @@ def run_workflow_stream(description: str, incident_id: str = ""):
                 error_message=str(e),
                 start_time=datetime.fromtimestamp(stream_start_time).isoformat(),
                 end_time=datetime.fromtimestamp(stream_end_time).isoformat(),
-            ))
+            )
         except Exception as audit_err:
             logger.error(f"审计记录提交失败（不影响结果）: {audit_err}")
 

@@ -1,54 +1,82 @@
-version: '3.8'
-
 networks:
   emergency-network:
     driver: bridge
 
 volumes:
+  mysql-data:
+    driver: local
   postgres-data:
     driver: local
   redis-data:
     driver: local
   minio-data:
     driver: local
+  minio-uploads:
+    driver: local
+  ai-model-cache:
+    driver: local
 
 services:
-  postgresql:
-    build: ./postgresql
-    container_name: emergency-postgresql
+  mysql:
+    image: mysql:8.0
+    container_name: emergency-mysql
     ports:
-      - "5432:5432"
+      - "3306:3306"
     environment:
-      POSTGRES_DB: spatial_ai_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ZAQ12wsx581!
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ZAQ12wsx581!}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-emergency_db}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --lower-case-table-names=1
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./sql/postgres/:/docker-entrypoint-initdb.d/
+      - mysql-data:/var/lib/mysql
+      - ./sql/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - emergency-network
-    restart: always
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-ZAQ12wsx581!}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: emergency-vector
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-emergency_vector}
+      POSTGRES_USER: ${PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-ZAQ12wsx581!}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./sql/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - emergency-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres} -d ${PG_DATABASE:-emergency_vector}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7.2
     container_name: emergency-redis
     ports:
       - "6379:6379"
-    environment:
-      REDIS_PASSWORD: ZAQ12wsx581!
-    command: redis-server --requirepass ZAQ12wsx581!
+    command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
     networks:
       - emergency-network
-    restart: always
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -60,16 +88,116 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: ZAQ12wsx581!
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-ZAQ12wsx581!}
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
+      - minio-uploads:/uploads
     networks:
       - emergency-network
-    restart: always
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 5
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/backend/Dockerfile.dev
+    container_name: emergency-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_MYSQL_JDBC_URL=jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-emergency_db}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=utf8
+      - SPRING_DATASOURCE_MYSQL_USERNAME=root
+      - SPRING_DATASOURCE_MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD:-ZAQ12wsx581!}
+      - SPRING_DATASOURCE_POSTGRES_JDBC_URL=jdbc:postgresql://postgres:5432/${PG_DATABASE:-emergency_vector}
+      - SPRING_DATASOURCE_POSTGRES_USERNAME=${PG_USER:-postgres}
+      - SPRING_DATASOURCE_POSTGRES_PASSWORD=${PG_PASSWORD:-ZAQ12wsx581!}
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+      - MINIO_URL=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-admin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-ZAQ12wsx581!}
+      - MINIO_BUCKET=${MINIO_BUCKET:-emergency-images}
+      - AI_SERVICE_URL=http://ai-service:8002
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-emergency-platform-ai-service-key-2024}
+      - AMAP_API_KEY=${AMAP_API_KEY:-2194d39fed9905e8cd5779f046a84fe1}
+      - JWT_SECRET=${JWT_SECRET:-emergency-platform-jwt-secret-key-2024-yunnan-disaster-response}
+    volumes:
+      - ../backend/src:/app/src
+      - ../backend/uploads:/app/uploads
+    networks:
+      - emergency-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: ../ai-service
+      dockerfile: ../deploy/ai-service/Dockerfile.dev
+    container_name: emergency-ai-service
+    ports:
+      - "8002:8002"
+    environment:
+      PORT: "8002"
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_DATABASE: ${PG_DATABASE:-emergency_vector}
+      PG_USER: ${PG_USER:-postgres}
+      PG_PASSWORD: ${PG_PASSWORD:-ZAQ12wsx581!}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-ZAQ12wsx581!}
+      MINIO_SECURE: "false"
+      BACKEND_URL: http://backend:8080
+      AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-emergency-platform-ai-service-key-2024}
+    volumes:
+      - ../ai-service:/app
+      - ../utils:/app/utils
+      - ../scripts:/app/scripts
+      - ../data:/app/data
+      - ai-model-cache:/root/.cache/huggingface
+    networks:
+      - emergency-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../deploy/frontend/Dockerfile.dev
+    container_name: emergency-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend/src:/app/src
+      - ../frontend/public:/app/public
+      - ../frontend/index.html:/app/index.html
+      - /app/node_modules
+    networks:
+      - emergency-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true

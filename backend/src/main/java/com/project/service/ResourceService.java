@@ -56,17 +56,23 @@ public class ResourceService {
     }
 
     @Transactional(readOnly = true, transactionManager = "mysqlTransactionManager")
-    public List<EmergencyResource> getAllResources() {
+    public List<EmergencyResource> getAllResources(String resourceType) {
         entityManager.clear();
+        if (resourceType != null && !resourceType.isBlank()) {
+            return resourceRepository.findByResourceType(resourceType);
+        }
         return resourceRepository.findAll();
     }
 
     @Transactional("mysqlTransactionManager")
     @SystemAuditLog(module = "resource", action = "lock", actionType = "UPDATE")
     public Map<String, Object> lockResource(String resourceId, Integer quantity, String incidentId, String planId, String remark) {
+        logger.info("开始锁定资源: resourceId={}, quantity={}, incidentId={}", resourceId, quantity, incidentId);
+        
         String lockKey = "resource:" + resourceId;
         
         if (!redisLockUtil.lock(lockKey)) {
+            logger.warn("获取Redis分布式锁失败: lockKey={}", lockKey);
             throw new RuntimeException("资源正在被其他操作占用，请稍后重试");
         }
 
@@ -76,20 +82,23 @@ public class ResourceService {
                         .map(inc -> "completed".equals(inc.getStatus()))
                         .orElse(false);
                 if (incidentCompleted) {
+                    logger.warn("事件已完成，不可调度资源: incidentId={}", incidentId);
                     throw new IllegalArgumentException("已结束的事件不可再调度资源");
                 }
             }
 
             EmergencyResource resource = resourceRepository.findByResourceId(resourceId)
-                    .orElseThrow(() -> new IllegalArgumentException("资源不存在"));
+                    .orElseThrow(() -> new IllegalArgumentException("资源不存在: " + resourceId));
 
             if (resource.getAvailableStock() < quantity) {
+                logger.warn("可用库存不足: resourceId={}, available={}, requested={}", resourceId, resource.getAvailableStock(), quantity);
                 throw new IllegalArgumentException("可用库存不足，当前可用: " + resource.getAvailableStock());
             }
 
             int updated = resourceRepository.lockResource(resourceId, quantity);
             if (updated == 0) {
-                throw new RuntimeException("锁定资源失败");
+                logger.error("锁定资源失败（乐观锁）: resourceId={}, quantity={}", resourceId, quantity);
+                throw new RuntimeException("锁定资源失败，资源状态可能已变更，请重试");
             }
 
             entityManager.flush();
@@ -133,14 +142,23 @@ public class ResourceService {
 
             entityManager.flush();
             
+            logger.info("资源锁定成功: resourceId={}, quantity={}, recordId={}", resourceId, quantity, record.getRecordId());
+            
             return Map.of(
                     "success", true,
                     "message", "资源锁定成功",
                     "resource", resource,
                     "recordId", record.getRecordId()
             );
+        } catch (Exception e) {
+            logger.error("资源锁定异常: resourceId={}, error={}", resourceId, e.getMessage(), e);
+            throw e;
         } finally {
-            redisLockUtil.unlock(lockKey);
+            try {
+                redisLockUtil.unlock(lockKey);
+            } catch (Exception e) {
+                logger.warn("释放Redis锁异常: lockKey={}, error={}", lockKey, e.getMessage());
+            }
         }
     }
 

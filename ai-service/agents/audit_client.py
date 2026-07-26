@@ -1,6 +1,7 @@
 """AI服务审计客户端：在工作流执行完成后，异步向后端提交执行记录和引用来源。"""
 
 import logging
+import os
 import uuid
 import time
 from typing import Dict, Any, List, Optional
@@ -11,7 +12,7 @@ from utils.logger import setup_logger
 
 logger = setup_logger()
 
-BACKEND_BASE_URL = "http://localhost:8080"
+BACKEND_BASE_URL = os.environ.get("BACKEND_URL", "http://localhost:8080").rstrip("/")
 AGENT_LOG_ENDPOINT = "/api/agent/log"
 REQUEST_TIMEOUT = 5.0
 
@@ -30,6 +31,8 @@ async def submit_agent_run(
 ) -> None:
     """异步提交Agent执行记录到后端。失败时仅记录日志，不抛出异常。"""
     try:
+        url = f"{BACKEND_BASE_URL}{AGENT_LOG_ENDPOINT}"
+        logger.info(f"提交审计记录: runId={run_id}, url={url}, status={status}")
         payload = {
             "runId": run_id,
             "incidentId": incident_id,
@@ -45,7 +48,7 @@ async def submit_agent_run(
 
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             response = await client.post(
-                f"{BACKEND_BASE_URL}{AGENT_LOG_ENDPOINT}",
+                url,
                 json=payload,
             )
             if response.status_code == 200:
