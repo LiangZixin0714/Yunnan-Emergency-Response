@@ -128,6 +128,8 @@ services:
       - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-emergency-platform-ai-service-key-2024}
       - AMAP_API_KEY=${AMAP_API_KEY:-2194d39fed9905e8cd5779f046a84fe1}
       - JWT_SECRET=${JWT_SECRET:-emergency-platform-jwt-secret-key-2024-yunnan-disaster-response}
+      - TZ=Asia/Shanghai
+      - JAVA_TOOL_OPTIONS=-Duser.timezone=Asia/Shanghai
     volumes:
       - ../backend/src:/app/src
       - ../backend/uploads:/app/uploads
@@ -164,6 +166,7 @@ services:
       MINIO_SECURE: "false"
       BACKEND_URL: http://backend:8080
       AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-emergency-platform-ai-service-key-2024}
+      TZ: Asia/Shanghai
     volumes:
       - ../ai-service:/app
       - ../utils:/app/utils

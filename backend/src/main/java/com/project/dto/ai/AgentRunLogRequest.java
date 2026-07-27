@@ -1,5 +1,6 @@
 package com.project.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
 
 import java.math.BigDecimal;
@@ -25,8 +26,10 @@ public class AgentRunLogRequest {
 
     private String errorMessage;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startTime;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endTime;
 
     private List<CitationItem> citations;

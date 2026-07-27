@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 import time
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 import httpx
@@ -15,6 +16,17 @@ logger = setup_logger()
 BACKEND_BASE_URL = os.environ.get("BACKEND_URL", "http://localhost:8080").rstrip("/")
 AGENT_LOG_ENDPOINT = "/api/agent/log"
 REQUEST_TIMEOUT = 5.0
+
+
+def _format_time(time_val: Optional[str]) -> Optional[str]:
+    """将ISO格式时间字符串转换为后端要求的 yyyy-MM-dd'T'HH:mm:ss 格式（去掉微秒）。"""
+    if not time_val:
+        return None
+    try:
+        dt = datetime.fromisoformat(time_val)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+    except (ValueError, TypeError):
+        return time_val
 
 
 async def submit_agent_run(
@@ -41,8 +53,8 @@ async def submit_agent_run(
             "outputResult": output_result,
             "status": status,
             "errorMessage": error_message,
-            "startTime": start_time,
-            "endTime": end_time,
+            "startTime": _format_time(start_time),
+            "endTime": _format_time(end_time),
             "citations": citations or [],
         }
 

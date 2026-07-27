@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -36,8 +37,8 @@ public class AgentRunService {
         }
 
         String status = request.getStatus();
-        if (!"success".equals(status) && !"failed".equals(status) && !"timeout".equals(status)) {
-            throw new IllegalArgumentException("status必须为success/failed/timeout");
+        if (!"success".equals(status) && !"failed".equals(status) && !"timeout".equals(status) && !"running".equals(status)) {
+            throw new IllegalArgumentException("status必须为success/failed/timeout/running");
         }
 
         AgentRun agentRun = new AgentRun();
@@ -69,24 +70,46 @@ public class AgentRunService {
         logger.info("Agent执行记录写入成功: runId={}, agentName={}, status={}", request.getRunId(), request.getAgentName(), request.getStatus());
     }
 
+    @Transactional("mysqlTransactionManager")
+    public void updateRun(String runId, String status, String outputResult, String errorMessage, LocalDateTime endTime) {
+        AgentRun agentRun = agentRunRepository.findByRunId(runId)
+                .orElseThrow(() -> new IllegalArgumentException("执行记录不存在: " + runId));
+
+        agentRun.setStatus(status);
+        if (outputResult != null) {
+            agentRun.setOutputResult(outputResult);
+        }
+        if (errorMessage != null) {
+            agentRun.setErrorMessage(errorMessage);
+        }
+        if (endTime != null) {
+            agentRun.setEndTime(endTime);
+        }
+
+        agentRunRepository.save(agentRun);
+        logger.info("Agent执行记录更新成功: runId={}, status={}", runId, status);
+    }
+
     public PageResult<AgentRun> listRuns(Integer page, Integer size, String incidentId, String agentName, String status) {
-        List<AgentRun> allRuns = agentRunRepository.findAll();
+        List<AgentRun> allRuns = new ArrayList<>(agentRunRepository.findAll());
 
         if (incidentId != null && !incidentId.isEmpty()) {
-            allRuns = allRuns.stream().filter(r -> incidentId.equals(r.getIncidentId())).toList();
+            allRuns = new ArrayList<>(allRuns.stream().filter(r -> incidentId.equals(r.getIncidentId())).toList());
         }
         if (agentName != null && !agentName.isEmpty()) {
-            allRuns = allRuns.stream().filter(r -> agentName.equals(r.getAgentName())).toList();
+            allRuns = new ArrayList<>(allRuns.stream().filter(r -> agentName.equals(r.getAgentName())).toList());
         }
         if (status != null && !status.isEmpty()) {
-            allRuns = allRuns.stream().filter(r -> status.equals(r.getStatus())).toList();
+            allRuns = new ArrayList<>(allRuns.stream().filter(r -> status.equals(r.getStatus())).toList());
         }
+
+        allRuns.sort((a, b) -> b.getId().compareTo(a.getId()));
 
         long total = allRuns.size();
         int start = (page - 1) * size;
         int end = (int) Math.min(start + size, total);
 
-        List<AgentRun> pageList = start < total ? allRuns.subList(start, end) : new ArrayList<>();
+        List<AgentRun> pageList = start < total ? new ArrayList<>(allRuns.subList(start, end)) : new ArrayList<>();
 
         return new PageResult<>(pageList, total, page, size);
     }

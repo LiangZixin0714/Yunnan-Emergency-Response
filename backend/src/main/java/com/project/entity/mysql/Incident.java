@@ -52,6 +52,9 @@ public class Incident {
     @Column(name = "resource_dispatch_status", length = 20)
     private String resourceDispatchStatus;
 
+    @Column(name = "reject_type", length = 20)
+    private String rejectType;
+
     @Column(name = "image_urls", columnDefinition = "TEXT")
     private String imageUrls;
 
@@ -200,6 +203,14 @@ public class Incident {
 
     public void setResourceDispatchStatus(String resourceDispatchStatus) {
         this.resourceDispatchStatus = resourceDispatchStatus;
+    }
+
+    public String getRejectType() {
+        return rejectType;
+    }
+
+    public void setRejectType(String rejectType) {
+        this.rejectType = rejectType;
     }
 
     public String getImageUrls() {

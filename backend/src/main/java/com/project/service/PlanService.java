@@ -151,6 +151,7 @@ public class PlanService {
         String description = buildDescription(incident);
         Map<String, String> requestBody = new HashMap<>();
         requestBody.put("description", description);
+        requestBody.put("incidentId", incidentId);
 
         logger.info("开始流式生成应急预案，incidentId: {}, 描述: {}", incidentId, description);
 
@@ -203,7 +204,8 @@ public class PlanService {
                             try {
                                 emitter.complete();
                                 logger.info("SSE流式传输完成，incidentId: {}", incidentId);
-                                savePlanToDatabase(incidentId, incident, planContentBuilder.toString());
+                                String planContent = planContentBuilder.toString();
+                                savePlanToDatabase(incidentId, incident, planContent);
                             } catch (Exception e) {
                                 logger.error("完成SSE时出错", e);
                             }
@@ -211,8 +213,12 @@ public class PlanService {
                 );
 
         emitter.onCompletion(() -> logger.info("SSE emitter completed"));
-        emitter.onTimeout(() -> logger.warn("SSE emitter timeout"));
-        emitter.onError(e -> logger.error("SSE emitter error", e));
+        emitter.onTimeout(() -> {
+            logger.warn("SSE emitter timeout");
+        });
+        emitter.onError(e -> {
+            logger.error("SSE emitter error", e);
+        });
 
         return emitter;
     }
@@ -271,9 +277,10 @@ public class PlanService {
 
     private String callSyncApi(Incident incident) throws Exception {
         String description = buildDescription(incident);
-        
+
         Map<String, String> requestBody = new HashMap<>();
         requestBody.put("description", description);
+        requestBody.put("incidentId", incident.getIncidentId());
 
         logger.info("调用AI同步API，请求体: {}", requestBody);
         

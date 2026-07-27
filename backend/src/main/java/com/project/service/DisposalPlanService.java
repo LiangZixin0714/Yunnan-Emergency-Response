@@ -7,6 +7,8 @@ import com.project.repository.mysql.IncidentRepository;
 import com.project.repository.mysql.PlanRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,10 +98,39 @@ public class DisposalPlanService {
         plan = planRepository.save(plan);
 
         updateIncidentDisposalPlanStatus(plan.getIncidentId(), "rejected");
-        updateIncidentResourceDispatchStatus(plan.getIncidentId(), "shortage");
 
-        logger.info("处置方案已驳回，planId: {}, incidentId: {}", plan.getPlanId(), plan.getIncidentId());
+        String rejectType = getCurrentUserRejectType();
+        updateIncidentRejectType(plan.getIncidentId(), rejectType);
+
+        if ("resource_rejected".equals(rejectType)) {
+            updateIncidentResourceDispatchStatus(plan.getIncidentId(), "shortage");
+        }
+
+        logger.info("处置方案已驳回，planId: {}, incidentId: {}, rejectType: {}", plan.getPlanId(), plan.getIncidentId(), rejectType);
         return plan;
+    }
+
+    private String getCurrentUserRejectType() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null) {
+                var authorities = authentication.getAuthorities();
+                for (var authority : authorities) {
+                    String role = authority.getAuthority();
+                    if (role != null) {
+                        if (role.contains("ADMIN")) {
+                            return "admin_rejected";
+                        }
+                        if (role.contains("RESOURCE_MANAGER")) {
+                            return "resource_rejected";
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("获取当前用户角色失败", e);
+        }
+        return "unknown_rejected";
     }
 
     @Transactional
@@ -130,6 +161,15 @@ public class DisposalPlanService {
             incident.setResourceDispatchStatus(status);
             incidentRepository.save(incident);
             logger.debug("更新灾情资源调度状态，incidentId: {}, status: {}", incidentId, status);
+        }
+    }
+
+    private void updateIncidentRejectType(String incidentId, String rejectType) {
+        Incident incident = incidentRepository.findByIncidentId(incidentId).orElse(null);
+        if (incident != null) {
+            incident.setRejectType(rejectType);
+            incidentRepository.save(incident);
+            logger.debug("更新灾情驳回类型，incidentId: {}, rejectType: {}", incidentId, rejectType);
         }
     }
 }

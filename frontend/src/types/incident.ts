@@ -21,6 +21,7 @@ export interface Incident {
   longitude: number | null
   disposalPlanStatus: DisposalPlanStatusValue | null
   resourceDispatchStatus: DispatchOrderStatusValue | null
+  rejectType?: string | null
   createdAt: string
   updatedAt: string
 }

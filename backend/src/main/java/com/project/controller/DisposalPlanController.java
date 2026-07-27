@@ -63,7 +63,7 @@ public class DisposalPlanController {
     }
 
     @PostMapping("/reject")
-    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('RESOURCE_MANAGER', 'ADMIN')")
     public ResponseEntity<Result<Plan>> reject(@Valid @RequestBody RejectRequest request) {
         Plan plan = disposalPlanService.reject(
                 request.getId(),

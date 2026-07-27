@@ -57,7 +57,7 @@ public class ResourceRequestController {
     }
 
     @PostMapping("/reject")
-    @PreAuthorize("hasAnyRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESOURCE_MANAGER')")
     public ResponseEntity<Result<ResourceRequest>> reject(@Valid @RequestBody RejectRequest request) {
         ResourceRequest req = resourceRequestService.reject(request.getId(), request.getReason());
         return ResponseEntity.ok(Result.success(req));

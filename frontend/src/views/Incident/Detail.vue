@@ -47,6 +47,7 @@ const unifiedStatusMap: Record<string, { label: string; type: string }> = {
   pending_review: { label: '待审核', type: 'warning' },
   requesting_resource: { label: '申请资源中', type: 'info' },
   rejected: { label: '已驳回', type: 'danger' },
+  resource_rejected: { label: '方案已驳回，请重新调度', type: 'warning' },
   completed: { label: '已完成', type: 'success' },
   no_plan: { label: '待拟方案', type: 'info' },
   dispatch_done: { label: '调度完成', type: 'success' },
@@ -56,7 +57,12 @@ function getUnifiedStatus(): string {
   const inc = incidentStore.currentIncident
   if (!inc) return 'no_plan'
   if (inc.status === 'completed') return 'completed'
-  if (inc.disposalPlanStatus === 'rejected') return 'rejected'
+  if (inc.disposalPlanStatus === 'rejected') {
+    if (inc.rejectType === 'resource_rejected') {
+      return 'resource_rejected'
+    }
+    return 'rejected'
+  }
   if (!inc.disposalPlanStatus || inc.disposalPlanStatus === 'draft') return 'no_plan'
   if (inc.disposalPlanStatus === 'submitted' || inc.disposalPlanStatus === 'resubmitted') return 'pending_review'
   if (inc.disposalPlanStatus === 'accepted' && inc.resourceDispatchStatus === 'shortage') return 'requesting_resource'
@@ -85,7 +91,8 @@ const canRecreateDisposalPlan = computed(() => {
   const role = authStore.roleName
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
   const status = incidentStore.currentIncident?.status
-  return role === 'OPERATOR' && dpStatus === 'rejected' && status !== 'completed'
+  const rejectType = incidentStore.currentIncident?.rejectType
+  return role === 'OPERATOR' && dpStatus === 'rejected' && rejectType !== 'resource_rejected' && status !== 'completed'
 })
 
 const canSubmitPlan = computed(() => {
@@ -99,13 +106,17 @@ const canDispatchResource = computed(() => {
   const role = authStore.roleName
   const status = incidentStore.currentIncident?.status
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return (role === 'RESOURCE_MANAGER' || role === 'ADMIN') && status !== 'completed' && (dpStatus === 'submitted' || dpStatus === 'resubmitted' || dpStatus === 'accepted' || dpStatus === 'draft' || !dpStatus)
+  const rejectType = incidentStore.currentIncident?.rejectType
+  if (role !== 'RESOURCE_MANAGER' || status === 'completed') return false
+  if (dpStatus === 'submitted' || dpStatus === 'resubmitted' || dpStatus === 'accepted') return true
+  if (dpStatus === 'rejected' && rejectType === 'resource_rejected') return true
+  return false
 })
 
 const canRejectPlan = computed(() => {
   const role = authStore.roleName
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return (role === 'RESOURCE_MANAGER' || role === 'ADMIN') && dpStatus === 'submitted'
+  return role === 'RESOURCE_MANAGER' && dpStatus === 'submitted'
 })
 
 const canCompleteIncident = computed(() => {
@@ -113,16 +124,25 @@ const canCompleteIncident = computed(() => {
   const status = incidentStore.currentIncident?.status
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
   const rdStatus = incidentStore.currentIncident?.resourceDispatchStatus
-  return (role === 'RESOURCE_MANAGER' || role === 'ADMIN') && status === 'processing' && dpStatus === 'accepted' && (rdStatus === 'executing' || rdStatus === 'completed')
+  return role === 'RESOURCE_MANAGER' && status === 'processing' && dpStatus === 'accepted' && (rdStatus === 'executing' || rdStatus === 'completed')
 })
 
 const canShowRejectedTip = computed(() => {
   const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
-  return dpStatus === 'rejected'
+  const rejectType = incidentStore.currentIncident?.rejectType
+  return dpStatus === 'rejected' && rejectType !== 'resource_rejected'
+})
+
+const canShowResourceRejectedTip = computed(() => {
+  const dpStatus = incidentStore.currentIncident?.disposalPlanStatus
+  const rejectType = incidentStore.currentIncident?.rejectType
+  return dpStatus === 'rejected' && rejectType === 'resource_rejected'
 })
 
 const canShowResourceRequestTip = computed(() => {
-  return incidentStore.currentIncident?.resourceDispatchStatus === 'shortage'
+  const rdStatus = incidentStore.currentIncident?.resourceDispatchStatus
+  const rejectType = incidentStore.currentIncident?.rejectType
+  return rdStatus === 'shortage' && rejectType !== 'resource_rejected'
 })
 
 const imageList = computed<string[]>(() => {
@@ -573,6 +593,18 @@ onMounted(async () => {
         >
           <template #title>
             已驳回方案，等待再次提交
+          </template>
+        </el-alert>
+
+        <el-alert
+          v-if="canShowResourceRejectedTip"
+          type="info"
+          :closable="false"
+          show-icon
+          class="incident-detail__rejected-tip"
+        >
+          <template #title>
+            方案已被资源管理员驳回，请重新进行资源调度
           </template>
         </el-alert>
 

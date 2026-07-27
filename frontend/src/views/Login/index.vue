@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import type { UserRoleValue } from '@/types/enums'
 
 const router = useRouter()
 const route = useRoute()
@@ -23,6 +24,24 @@ const rules: FormRules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
+function hasRouteAccess(path: string, role: UserRoleValue | null): boolean {
+  const mainRoute = router.options.routes.find((r) => r.path === '/')
+  if (!mainRoute?.children || !role) return true
+  const targetPath = path.startsWith('/') ? path : '/' + path
+  const allRoutes = [...mainRoute.children, ...(mainRoute.children.flatMap((c) => c.children ?? []))]
+  for (const r of allRoutes) {
+    const rPath = (r.path.startsWith('/') ? '' : '/') + r.path
+    if (rPath === targetPath) {
+      const roles = r.meta?.roles as UserRoleValue[] | undefined
+      if (roles && roles.length > 0) {
+        return roles.includes(role)
+      }
+      return true
+    }
+  }
+  return true
+}
+
 async function handleLogin(): Promise<void> {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
@@ -32,7 +51,11 @@ async function handleLogin(): Promise<void> {
     await authStore.login({ username: loginForm.username, password: loginForm.password })
     ElMessage.success('登录成功')
     const redirect = (route.query.redirect as string) || '/home'
-    router.push(redirect)
+    if (redirect && redirect !== '/home' && !hasRouteAccess(redirect, authStore.roleName)) {
+      router.push('/home')
+    } else {
+      router.push(redirect)
+    }
   } catch {
     // Error handled by Axios interceptor
   } finally {
